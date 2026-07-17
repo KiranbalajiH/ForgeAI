@@ -1,13 +1,28 @@
+import { api } from "@/lib/axios";
+
 export const authService = {
-  login: async (data: unknown) => {
-    console.log("Login", data);
+  async login(data: unknown) {
+    console.log("Login Request:", data);
+
+    // Future backend integration:
+    // return api.post("/auth/login", data);
+
+    return Promise.resolve();
   },
 
-  signup: async (data: unknown) => {
-    console.log("Signup", data);
+  async signup(data: unknown) {
+    console.log("Signup Request:", data);
+
+    // return api.post("/auth/signup", data);
+
+    return Promise.resolve();
   },
 
-  forgotPassword: async (data: unknown) => {
-    console.log("Forgot Password", data);
+  async forgotPassword(data: unknown) {
+    console.log("Forgot Password:", data);
+
+    // return api.post("/auth/forgot-password", data);
+
+    return Promise.resolve();
   },
 };
