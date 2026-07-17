@@ -1,12 +1,37 @@
+import AppLayout from "@/components/layout/app-layout";
+import PageHeader from "@/components/common/page-header";
+import DashboardOverview from "@/components/dashboard/dashboard-overview";
+import QuickActions from "@/components/dashboard/quick-actions";
+import RecentActivity from "@/components/dashboard/recent-activity";
+import RepositoryHealthChart from "@/components/dashboard/repository-health-chart";
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-6xl font-bold">ForgeAI</h1>
-        <p className="mt-4 text-slate-400 text-lg">
-          AI Software Engineering Copilot
-        </p>
+    <AppLayout>
+      <div className="space-y-8">
+        <PageHeader
+          title="Dashboard"
+          description="Welcome to ForgeAI Engineering Intelligence Platform."
+        />
+
+        <DashboardOverview />
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <RecentActivity />
+          </div>
+
+          <QuickActions />
+        </div>
+
+        <div className="rounded-xl border p-6">
+          <h2 className="mb-6 text-xl font-semibold">
+            Repository Health Trend
+          </h2>
+
+          <RepositoryHealthChart />
+        </div>
       </div>
-    </main>
+    </AppLayout>
   );
 }
