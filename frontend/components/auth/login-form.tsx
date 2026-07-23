@@ -92,9 +92,10 @@ export default function LoginForm() {
       </div>
 
       <Button
-        className="w-full"
-        disabled={isSubmitting}
-      >
+  type="submit"
+  className="w-full"
+  disabled={isSubmitting}
+>
         {isSubmitting ? "Signing In..." : "Sign In"}
       </Button>
 
