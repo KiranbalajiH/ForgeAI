@@ -28,12 +28,15 @@ export function AuthProvider({
     }
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    Cookies.set("token", newToken);
+ const login = (newToken: string, newUser?: User) => {
+  Cookies.set("token", newToken);
 
-    setToken(newToken);
+  setToken(newToken);
+
+  if (newUser) {
     setUser(newUser);
-  };
+  }
+};
 
   const logout = () => {
     Cookies.remove("token");

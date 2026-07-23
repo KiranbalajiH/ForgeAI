@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -16,6 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginForm() {
+  const router = useRouter();
+  const { login } = useAuth();
+  
   const {
     register,
     handleSubmit,
@@ -25,8 +30,20 @@ export default function LoginForm() {
   });
 
   async function onSubmit(data: LoginFormData) {
-    await authService.login(data);
+  console.log("Submitting form...", data);
+
+  try {
+    const response = await authService.login(data);
+
+    console.log("Backend response:", response);
+
+    login(response.token);
+
+    router.push("/");
+  } catch (error) {
+    console.error("Login failed:", error);
   }
+}
 
   return (
     <form
