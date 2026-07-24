@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 export default function LoginForm() {
   const router = useRouter();
   const { login } = useAuth();
-  
+
   const {
     register,
     handleSubmit,
@@ -30,20 +30,29 @@ export default function LoginForm() {
   });
 
   async function onSubmit(data: LoginFormData) {
-  console.log("Submitting form...", data);
+    console.log("Submitting form...", data);
 
-  try {
-    const response = await authService.login(data);
+    try {
+      const response = await authService.login(data);
 
-    console.log("Backend response:", response);
+      console.log("Backend response:", response);
 
-    login(response.token);
+      // Backend returns:
+      // {
+      //   success: true,
+      //   data: {
+      //     token,
+      //     user
+      //   }
+      // }
 
-    router.push("/");
-  } catch (error) {
-    console.error("Login failed:", error);
+      login(response.data.token, response.data.user);
+
+      router.push("/");
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
   }
-}
 
   return (
     <form
@@ -92,10 +101,10 @@ export default function LoginForm() {
       </div>
 
       <Button
-  type="submit"
-  className="w-full"
-  disabled={isSubmitting}
->
+        type="submit"
+        className="w-full"
+        disabled={isSubmitting}
+      >
         {isSubmitting ? "Signing In..." : "Sign In"}
       </Button>
 
