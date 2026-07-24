@@ -4,7 +4,12 @@ import {
   ShieldCheck,
   BrainCircuit,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 const stats = [
   {
@@ -31,13 +36,16 @@ const stats = [
 
 export default function DashboardOverview() {
   return (
-    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {stats.map((stat) => {
         const Icon = stat.icon;
 
         return (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <Card
+            key={stat.title}
+            className="transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+          >
+            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4 md:px-6 md:pt-6">
               <CardTitle className="text-sm font-medium">
                 {stat.title}
               </CardTitle>
@@ -45,8 +53,10 @@ export default function DashboardOverview() {
               <Icon className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
 
-            <CardContent>
-              <p className="text-3xl font-bold">{stat.value}</p>
+            <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
+              <p className="text-2xl font-bold md:text-3xl">
+                {stat.value}
+              </p>
             </CardContent>
           </Card>
         );
