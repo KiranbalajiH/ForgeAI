@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.middleware";
-import { connect } from "./github.controller";
+import {
+  connect,
+  repositories,
+} from "./github.controller";
 
 const router = Router();
 
@@ -9,5 +12,8 @@ router.use(authenticateToken);
 
 // POST /github/connect
 router.post("/connect", connect);
+
+// POST /github/repositories
+router.post("/repositories", repositories);
 
 export default router;
