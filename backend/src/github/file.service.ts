@@ -57,10 +57,13 @@ export class FileService {
     return fs.readFileSync(fullPath, "utf8");
   }
 
-  getAllFiles(dir: string, basePath = ""): string[] {
+  getAllFiles(
+    dir: string,
+    basePath = ""
+  ): { path: string; size: number }[] {
     const items = fs.readdirSync(dir);
 
-    let files: string[] = [];
+    let files: { path: string; size: number }[] = [];
 
     for (const item of items) {
       if (IGNORE_FOLDERS.includes(item)) {
@@ -74,10 +77,13 @@ export class FileService {
       if (stats.isDirectory()) {
         files = files.concat(this.getAllFiles(fullPath, relativePath));
       } else {
-        files.push(relativePath);
+        files.push({
+          path: relativePath,
+          size: stats.size,
+        });
       }
     }
 
     return files;
   }
-}   
+}

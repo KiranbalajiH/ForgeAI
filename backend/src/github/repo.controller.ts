@@ -1,9 +1,11 @@
 import { Request, Response } from "express";
 import { RepoService } from "./repo.service";
 import { FileService } from "./file.service";
+import { RepositoryAnalyzerService } from "./repository-analyzer.service";
 
 const repoService = new RepoService();
 const fileService = new FileService();
+const repositoryAnalyzerService = new RepositoryAnalyzerService();
 
 export class RepoController {
   async clone(req: Request, res: Response) {
@@ -68,6 +70,31 @@ export class RepoController {
       });
     } catch (error: any) {
       return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  async analyze(req: Request, res: Response) {
+    try {
+      const { repoName } = req.body;
+
+      if (!repoName) {
+        return res.status(400).json({
+          success: false,
+          message: "repoName is required",
+        });
+      }
+
+      const result = repositoryAnalyzerService.analyzeRepository(repoName);
+
+      return res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
         success: false,
         message: error.message,
       });
