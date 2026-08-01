@@ -12,6 +12,7 @@ import chatRoutes from "./chats/chat.routes";
 import messageRoutes from "./messages/message.routes";
 import githubRoutes from "./github/github.routes";
 import repoRoutes from "./github/repo.routes";
+import aiRoutes from "./ai/ai.routes";
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use("/projects/:projectId/chats", chatRoutes);
 app.use("/chats/:sessionId/messages", messageRoutes);
 app.use("/github", githubRoutes);
 app.use("/repo", repoRoutes);
+app.use("/ai", aiRoutes);
 
 // Health Check
 app.get("/", (_req, res) => {
