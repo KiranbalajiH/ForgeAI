@@ -2,23 +2,33 @@ import fs from "fs";
 import path from "path";
 
 export interface PackageAnalysis {
-  name: string;
-  version: string;
-  packageManager: string;
-  scripts: Record<string, string>;
-  dependencies: string[];
-  devDependencies: string[];
+  backend: any | null;
+  frontend: any | null;
 }
 
 export class PackageAnalyzerService {
   analyze(repoName: string): PackageAnalysis | null {
-    const packageJsonPath = path.join(
-      process.cwd(),
-      "temp",
-      repoName,
-      "package.json"
+    const repoPath = path.join(process.cwd(), "temp", repoName);
+
+    const backendPackage = this.readPackage(
+      path.join(repoPath, "backend", "package.json")
     );
 
+    const frontendPackage = this.readPackage(
+      path.join(repoPath, "frontend", "package.json")
+    );
+
+    if (!backendPackage && !frontendPackage) {
+      return null;
+    }
+
+    return {
+      backend: backendPackage,
+      frontend: frontendPackage,
+    };
+  }
+
+  private readPackage(packageJsonPath: string): any | null {
     if (!fs.existsSync(packageJsonPath)) {
       return null;
     }
@@ -27,25 +37,12 @@ export class PackageAnalyzerService {
       fs.readFileSync(packageJsonPath, "utf8")
     );
 
-    let packageManager = "npm";
-
-    const repoPath = path.join(process.cwd(), "temp", repoName);
-
-    if (fs.existsSync(path.join(repoPath, "yarn.lock"))) {
-      packageManager = "yarn";
-    } else if (fs.existsSync(path.join(repoPath, "pnpm-lock.yaml"))) {
-      packageManager = "pnpm";
-    } else if (fs.existsSync(path.join(repoPath, "bun.lockb"))) {
-      packageManager = "bun";
-    }
-
     return {
       name: packageJson.name ?? "Unknown",
       version: packageJson.version ?? "Unknown",
-      packageManager,
       scripts: packageJson.scripts ?? {},
-      dependencies: Object.keys(packageJson.dependencies ?? {}),
-      devDependencies: Object.keys(packageJson.devDependencies ?? {}),
+      dependencies: packageJson.dependencies ?? {},
+      devDependencies: packageJson.devDependencies ?? {},
     };
   }
 }
