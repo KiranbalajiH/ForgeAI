@@ -28,12 +28,41 @@ export class ProjectDetectorService {
 
     if (dependencies.next) {
       framework = "Next.js";
-    } else if (dependencies.react) {
+    } else if (dependencies.react && dependencies["react-dom"]) {
       framework = "React";
     } else if (dependencies.express) {
       framework = "Express";
     } else if (dependencies["@nestjs/core"]) {
       framework = "NestJS";
+    } else if (dependencies.vue) {
+      framework = "Vue";
+    } else if (dependencies.nuxt) {
+      framework = "Nuxt";
+    } else if (dependencies["@angular/core"]) {
+      framework = "Angular";
+    } else if (dependencies.vite) {
+      framework = "Vite";
+    } else if (dependencies.fastify) {
+      framework = "Fastify";
+    } else if (dependencies.koa) {
+      framework = "Koa";
+    } else if (dependencies.hono) {
+      framework = "Hono";
+    } else if (dependencies.svelte) {
+      framework = "Svelte";
+    } else if (dependencies.electron) {
+      framework = "Electron";
+    } else if (dependencies["react-native"]) {
+      framework = "React Native";
+    }
+
+    let language = "JavaScript";
+
+    if (
+      dependencies.typescript ||
+      fs.existsSync(path.join(repoPath, "tsconfig.json"))
+    ) {
+      language = "TypeScript";
     }
 
     let packageManager = "npm";
@@ -47,7 +76,7 @@ export class ProjectDetectorService {
     }
 
     return {
-      language: "TypeScript",
+      language,
       framework,
       packageManager,
     };
