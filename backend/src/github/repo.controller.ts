@@ -34,7 +34,16 @@ export class RepoController {
 
   async read(req: Request, res: Response) {
     try {
-      const { repoName } = req.params;
+      const repoName = Array.isArray(req.params.repoName)
+        ? req.params.repoName[0]
+        : req.params.repoName;
+
+      if (!repoName) {
+        return res.status(400).json({
+          success: false,
+          message: "repoName is required",
+        });
+      }
 
       const files = fileService.readRepository(repoName);
 
@@ -52,8 +61,18 @@ export class RepoController {
 
   async readFile(req: Request, res: Response) {
     try {
-      const { repoName } = req.params;
+      const repoName = Array.isArray(req.params.repoName)
+        ? req.params.repoName[0]
+        : req.params.repoName;
+
       const { filePath } = req.query;
+
+      if (!repoName) {
+        return res.status(400).json({
+          success: false,
+          message: "repoName is required",
+        });
+      }
 
       if (!filePath || typeof filePath !== "string") {
         return res.status(400).json({
