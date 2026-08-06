@@ -16,6 +16,7 @@ export default function ChatPanel({ repositoryName }: ChatPanelProps) {
     isLoading,
     setInput,
     sendMessage,
+    regenerateMessage,
   } = useRepositoryChat({ repositoryName });
 
   return (
@@ -43,7 +44,11 @@ export default function ChatPanel({ repositoryName }: ChatPanelProps) {
       {/* Message area */}
       <div className="flex flex-1 flex-col overflow-hidden rounded-xl border bg-background">
         <div className="flex flex-1 flex-col overflow-hidden p-4">
-          <ChatMessageList messages={messages} isLoading={isLoading} />
+          <ChatMessageList
+            messages={messages}
+            isLoading={isLoading}
+            onRegenerate={regenerateMessage}
+          />
         </div>
 
         {/* Input area */}

@@ -15,17 +15,19 @@ interface UseRepositoryChatReturn {
   error: string | null;
   setInput: (value: string) => void;
   sendMessage: () => Promise<void>;
+  regenerateMessage: (messageId: string) => Promise<void>;
 }
 
 /**
  * useRepositoryChat
  *
- * Manages all state for a single-turn Repository Chat session:
- * - messages[]   : conversation history displayed in the UI
- * - input        : current textarea value
- * - isLoading    : true while waiting for the API response
- * - error        : user-friendly error string, null when no error
- * - sendMessage  : submits the current input, appends both messages, clears input
+ * Manages state for Repository Chat:
+ * - messages[]       : conversation history displayed in the UI
+ * - input            : current textarea value
+ * - isLoading        : true while waiting for API response
+ * - error            : user-friendly error string, null when no error
+ * - sendMessage      : submits current input, appends user message + AI response
+ * - regenerateMessage: re-sends the previous user question for a specific AI response
  */
 export function useRepositoryChat({
   repositoryName,
@@ -39,7 +41,7 @@ export function useRepositoryChat({
     const question = input.trim();
     if (!question || isLoading) return;
 
-    // 1. Optimistically append the user's message immediately
+    // 1. Optimistically append user's message immediately
     const userMessage: ChatMessageItem = {
       id: `user-${Date.now()}`,
       role: "user",
@@ -67,7 +69,6 @@ export function useRepositoryChat({
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err: unknown) {
-      // 4. Surface a user-friendly error — do NOT remove the user's message
       const message =
         err instanceof Error
           ? err.message
@@ -75,7 +76,6 @@ export function useRepositoryChat({
 
       setError(message);
 
-      // Append an error bubble as an assistant message so context is preserved
       const errorMessage: ChatMessageItem = {
         id: `error-${Date.now()}`,
         role: "assistant",
@@ -88,6 +88,69 @@ export function useRepositoryChat({
     }
   }, [input, isLoading, repositoryName]);
 
+  const regenerateMessage = useCallback(
+    async (targetMessageId: string) => {
+      if (isLoading) return;
+
+      // Find the index of the target message
+      const index = messages.findIndex((m) => m.id === targetMessageId);
+      if (index === -1) return;
+
+      // Find the preceding user message
+      const precedingUserMsg = messages
+        .slice(0, index)
+        .reverse()
+        .find((m) => m.role === "user");
+
+      const questionToResend = precedingUserMsg
+        ? precedingUserMsg.content
+        : messages.slice(0, index).length > 0
+        ? messages[0].content
+        : null;
+
+      if (!questionToResend) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      // Remove the target message from history
+      setMessages((prev) => prev.filter((m) => m.id !== targetMessageId));
+
+      try {
+        const response = await repositoryChatService.ask({
+          repository: repositoryName,
+          question: questionToResend,
+        });
+
+        const newAssistantMsg: ChatMessageItem = {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: response.answer,
+        };
+
+        setMessages((prev) => [...prev, newAssistantMsg]);
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to regenerate response. Please try again.";
+
+        setError(message);
+
+        const errorMessage: ChatMessageItem = {
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content: `⚠️ ${message}`,
+        };
+
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isLoading, messages, repositoryName]
+  );
+
   return {
     messages,
     input,
@@ -95,5 +158,6 @@ export function useRepositoryChat({
     error,
     setInput,
     sendMessage,
+    regenerateMessage,
   };
 }

@@ -1,19 +1,28 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquareDashed } from "lucide-react";
+import { MessageSquareDashed, Bot } from "lucide-react";
 import ChatMessage, { ChatMessageItem } from "./chat-message";
 
 interface ChatMessageListProps {
   messages: ChatMessageItem[];
   isLoading?: boolean;
+  onRegenerate?: (id: string) => void;
 }
 
 export default function ChatMessageList({
   messages,
   isLoading = false,
+  onRegenerate,
 }: ChatMessageListProps) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Requirement 3: Auto Scroll (Smooth scrolling to newest message)
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isLoading]);
+
   const isEmpty = messages.length === 0 && !isLoading;
 
   if (isEmpty) {
@@ -56,22 +65,32 @@ export default function ChatMessageList({
     <ScrollArea className="flex-1 pr-2">
       <div className="space-y-6 pb-4">
         {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
+          <ChatMessage
+            key={message.id}
+            message={message}
+            onRegenerate={onRegenerate}
+            isLoading={isLoading}
+          />
         ))}
 
-        {/* Loading skeleton — shown while waiting for the AI response */}
+        {/* Requirement 4: Loading Experience (Typing indicator) */}
         {isLoading && (
-          <div className="flex gap-3">
-            {/* Avatar placeholder */}
-            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+          <div className="flex items-center gap-3 text-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-muted text-muted-foreground">
+              <Bot className="h-4 w-4" />
+            </div>
 
-            {/* Text lines placeholder */}
-            <div className="flex flex-1 flex-col gap-2 pt-1">
-              <Skeleton className="h-4 w-3/4 rounded-lg" />
-              <Skeleton className="h-4 w-1/2 rounded-lg" />
+            <div className="flex items-center gap-1.5 rounded-xl bg-muted px-4 py-3 text-muted-foreground rounded-tl-sm">
+              <span className="text-xs font-medium mr-1">ForgeAI is thinking</span>
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
             </div>
           </div>
         )}
+
+        {/* Anchor element for smooth auto-scroll */}
+        <div ref={bottomRef} />
       </div>
     </ScrollArea>
   );

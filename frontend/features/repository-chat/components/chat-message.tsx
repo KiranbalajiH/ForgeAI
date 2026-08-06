@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
 import MarkdownRenderer from "./markdown-renderer";
+import ChatMessageActions from "./chat-message-actions";
 
 export type MessageRole = "user" | "assistant";
 
@@ -12,9 +13,15 @@ export interface ChatMessageItem {
 
 interface ChatMessageProps {
   message: ChatMessageItem;
+  onRegenerate?: (id: string) => void;
+  isLoading?: boolean;
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({
+  message,
+  onRegenerate,
+  isLoading = false,
+}: ChatMessageProps) {
   const isUser = message.role === "user";
 
   return (
@@ -40,19 +47,35 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         )}
       </div>
 
-      {/* Bubble */}
+      {/* Message content container */}
       <div
         className={cn(
-          "rounded-xl px-4 py-3 leading-relaxed",
-          isUser
-            ? "max-w-[75%] bg-primary text-primary-foreground rounded-tr-sm"
-            : "max-w-[85%] bg-muted text-foreground rounded-tl-sm"
+          "flex flex-col",
+          isUser ? "items-end max-w-[75%]" : "items-start max-w-[85%]"
         )}
       >
-        {isUser ? (
-          <div className="whitespace-pre-wrap">{message.content}</div>
-        ) : (
-          <MarkdownRenderer content={message.content} />
+        <div
+          className={cn(
+            "rounded-xl px-4 py-3 leading-relaxed w-full",
+            isUser
+              ? "bg-primary text-primary-foreground rounded-tr-sm"
+              : "bg-muted text-foreground rounded-tl-sm"
+          )}
+        >
+          {isUser ? (
+            <div className="whitespace-pre-wrap">{message.content}</div>
+          ) : (
+            <MarkdownRenderer content={message.content} />
+          )}
+        </div>
+
+        {/* Modular Actions for AI Messages (Copy & Regenerate) */}
+        {!isUser && (
+          <ChatMessageActions
+            content={message.content}
+            onRegenerate={onRegenerate ? () => onRegenerate(message.id) : undefined}
+            isLoading={isLoading}
+          />
         )}
       </div>
     </div>
