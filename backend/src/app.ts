@@ -14,6 +14,7 @@ import githubRoutes from "./github/github.routes";
 import repoRoutes from "./github/repo.routes";
 import aiRoutes from "./ai/ai.routes";
 import repositoryChatRoutes from "./chat/repository-chat.routes";
+import repositorySearchRoutes from "./github/repository-search.routes";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/github", githubRoutes);
 app.use("/repo", repoRoutes);
 app.use("/ai", aiRoutes);
 app.use("/api/chat", repositoryChatRoutes);
+app.use("/api/repositories", repositorySearchRoutes);
 
 // Health Check
 app.get("/", (_req, res) => {
