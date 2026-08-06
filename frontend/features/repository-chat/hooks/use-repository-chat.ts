@@ -24,13 +24,13 @@ interface UseRepositoryChatReturn {
 /**
  * useRepositoryChat
  *
- * Manages state for Repository Chat:
+ * Manages streaming state for Repository Chat:
  * - messages[]       : conversation history displayed in the UI
  * - input            : current textarea value
- * - isLoading        : true while waiting for API response
+ * - isLoading        : true while waiting for or receiving streamed tokens
  * - error            : user-friendly error string, null when no error
- * - sendMessage      : submits current input, appends user message + AI response (with sources)
- * - regenerateMessage: re-sends the previous user question for a specific AI response
+ * - sendMessage      : streams AI response tokens incrementally
+ * - regenerateMessage: re-streams the response for a previous question
  */
 export function useRepositoryChat({
   repositoryName,
@@ -44,55 +44,64 @@ export function useRepositoryChat({
     const question = input.trim();
     if (!question || isLoading) return;
 
-    // 1. Optimistically append user's message immediately
+    const userMsgId = `user-${Date.now()}`;
+    const assistantMsgId = `assistant-${Date.now()}`;
+
+    // 1. Optimistically append user message + empty assistant placeholder
     const userMessage: ChatMessageItem = {
-      id: `user-${Date.now()}`,
+      id: userMsgId,
       role: "user",
       content: question,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const assistantMessage: ChatMessageItem = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "",
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setInput("");
     setIsLoading(true);
     setError(null);
 
-    try {
-      // 2. Call the existing RepositoryChatService
-      const response = await repositoryChatService.ask({
-        repository: repositoryName,
-        question,
-      });
-
-      const sources: SourceReference[] =
-        response.metadata?.sources ?? response.sources ?? [];
-
-      // 3. Append the AI response with source citations
-      const assistantMessage: ChatMessageItem = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: response.answer,
-        sources,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again.";
-
-      setError(message);
-
-      const errorMessage: ChatMessageItem = {
-        id: `error-${Date.now()}`,
-        role: "assistant",
-        content: `⚠️ ${message}`,
-      };
-
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
+    // 2. Stream tokens incrementally via repositoryChatService
+    await repositoryChatService.streamAsk(
+      { repository: repositoryName, question },
+      (token: string) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? { ...msg, content: msg.content + token }
+              : msg
+          )
+        );
+      },
+      (_metadata, sources: SourceReference[]) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId ? { ...msg, sources } : msg
+          )
+        );
+        setIsLoading(false);
+      },
+      (errorMsg: string) => {
+        setError(errorMsg);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  content: msg.content
+                    ? `${msg.content}\n\n⚠️ ${errorMsg}`
+                    : `⚠️ ${errorMsg}`,
+                }
+              : msg
+          )
+        );
+        setIsLoading(false);
+      }
+    );
   }, [input, isLoading, repositoryName]);
 
   const regenerateMessage = useCallback(
@@ -118,43 +127,50 @@ export function useRepositoryChat({
       setIsLoading(true);
       setError(null);
 
-      setMessages((prev) => prev.filter((m) => m.id !== targetMessageId));
+      const newAssistantMsgId = `assistant-${Date.now()}`;
 
-      try {
-        const response = await repositoryChatService.ask({
-          repository: repositoryName,
-          question: questionToResend,
-        });
+      // Replace old target message with new streaming placeholder
+      setMessages((prev) => [
+        ...prev.filter((m) => m.id !== targetMessageId),
+        { id: newAssistantMsgId, role: "assistant", content: "" },
+      ]);
 
-        const sources: SourceReference[] =
-          response.metadata?.sources ?? response.sources ?? [];
-
-        const newAssistantMsg: ChatMessageItem = {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: response.answer,
-          sources,
-        };
-
-        setMessages((prev) => [...prev, newAssistantMsg]);
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : "Failed to regenerate response. Please try again.";
-
-        setError(message);
-
-        const errorMessage: ChatMessageItem = {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          content: `⚠️ ${message}`,
-        };
-
-        setMessages((prev) => [...prev, errorMessage]);
-      } finally {
-        setIsLoading(false);
-      }
+      await repositoryChatService.streamAsk(
+        { repository: repositoryName, question: questionToResend },
+        (token: string) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === newAssistantMsgId
+                ? { ...msg, content: msg.content + token }
+                : msg
+            )
+          );
+        },
+        (_metadata, sources: SourceReference[]) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === newAssistantMsgId ? { ...msg, sources } : msg
+            )
+          );
+          setIsLoading(false);
+        },
+        (errorMsg: string) => {
+          setError(errorMsg);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === newAssistantMsgId
+                ? {
+                    ...msg,
+                    content: msg.content
+                      ? `${msg.content}\n\n⚠️ ${errorMsg}`
+                      : `⚠️ ${errorMsg}`,
+                  }
+                : msg
+            )
+          );
+          setIsLoading(false);
+        }
+      );
     },
     [isLoading, messages, repositoryName]
   );

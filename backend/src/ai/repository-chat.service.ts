@@ -22,38 +22,74 @@ export interface ChatResult {
  *
  * Responsibility: Accept a user question about a repository, build the
  * appropriate context from the existing analysis, call LLMService, and
- * return the AI response plus context domains and file source citations.
+ * return/stream the AI response plus context domains and file source citations.
  *
  * - Does NOT duplicate analysis: reads from AnalysisCacheService first,
  *   and only falls back to AnalysisPipelineService if no cache entry exists.
  * - Does NOT handle conversation history.
- * - Does NOT stream.
  */
 export class RepositoryChatService {
   /**
-   * Answer a single question about the given repository.
+   * Answer a single question about the given repository (non-streaming).
    *
-   * @param repository - The repository slug (must already be cloned)
+   * @param repository - The repository slug
    * @param question   - The developer's natural language question
    * @returns { answer, contextUsed, sources }
    */
   async ask(repository: string, question: string): Promise<ChatResult> {
-    // 1. Resolve analysis — cache-first, pipeline fallback
     let analysis = analysisCacheService.get(repository);
 
     if (!analysis) {
       analysis = pipeline.analyze(repository);
     }
 
-    // 2. Build context + track which domains & source files were injected
     const { prompt, contextUsed, sources } = contextService.build(
       analysis,
       question
     );
 
-    // 3. Single-turn LLM call via the existing LLMService abstraction
     const answer = await llmService.chat(prompt);
 
     return { answer, contextUsed, sources };
+  }
+
+  /**
+   * Stream the AI response tokens for a question in real-time.
+   *
+   * @param repository - The repository slug
+   * @param question   - The developer's natural language question
+   * @param onChunk    - Callback invoked as each token chunk arrives from LLMService
+   * @returns { answer, contextUsed, sources }
+   */
+  async streamAsk(
+    repository: string,
+    question: string,
+    onChunk: (token: string) => void
+  ): Promise<ChatResult> {
+    let analysis = analysisCacheService.get(repository);
+
+    if (!analysis) {
+      analysis = pipeline.analyze(repository);
+    }
+
+    const { prompt, contextUsed, sources } = contextService.build(
+      analysis,
+      question
+    );
+
+    const stream = llmService.streamChat([
+      { role: "user", content: prompt },
+    ]);
+
+    let fullAnswer = "";
+
+    for await (const chunk of stream) {
+      if (chunk) {
+        fullAnswer += chunk;
+        onChunk(chunk);
+      }
+    }
+
+    return { answer: fullAnswer, contextUsed, sources };
   }
 }

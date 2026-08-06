@@ -20,12 +20,15 @@ export default function ChatMessageList({
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto Scroll to newest message
+  // Auto Scroll to newest message on every token/message update
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
   const isEmpty = messages.length === 0 && !isLoading;
+  const lastMessage = messages[messages.length - 1];
+  const isInitialThinking =
+    isLoading && (!lastMessage || (lastMessage.role === "assistant" && !lastMessage.content));
 
   if (isEmpty) {
     return (
@@ -66,18 +69,25 @@ export default function ChatMessageList({
   return (
     <ScrollArea className="flex-1 pr-2">
       <div className="space-y-6 pb-4">
-        {messages.map((message) => (
-          <ChatMessage
-            key={message.id}
-            message={message}
-            repositoryName={repositoryName}
-            onRegenerate={onRegenerate}
-            isLoading={isLoading}
-          />
-        ))}
+        {messages.map((message) => {
+          // Hide empty assistant placeholder while initial thinking indicator is shown
+          if (message.role === "assistant" && !message.content && isLoading) {
+            return null;
+          }
 
-        {/* Loading Experience (Typing indicator) */}
-        {isLoading && (
+          return (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              repositoryName={repositoryName}
+              onRegenerate={onRegenerate}
+              isLoading={isLoading}
+            />
+          );
+        })}
+
+        {/* Initial Typing Indicator — shown before first token arrives */}
+        {isInitialThinking && (
           <div className="flex items-center gap-3 text-sm">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-muted text-muted-foreground">
               <Bot className="h-4 w-4" />
