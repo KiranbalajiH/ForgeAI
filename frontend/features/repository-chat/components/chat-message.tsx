@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
+import MarkdownRenderer from "./markdown-renderer";
 
 export type MessageRole = "user" | "assistant";
 
@@ -42,13 +43,17 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       {/* Bubble */}
       <div
         className={cn(
-          "max-w-[75%] rounded-xl px-4 py-3 leading-relaxed",
+          "rounded-xl px-4 py-3 leading-relaxed",
           isUser
-            ? "bg-primary text-primary-foreground rounded-tr-sm"
-            : "bg-muted text-foreground rounded-tl-sm"
+            ? "max-w-[75%] bg-primary text-primary-foreground rounded-tr-sm"
+            : "max-w-[85%] bg-muted text-foreground rounded-tl-sm"
         )}
       >
-        {message.content}
+        {isUser ? (
+          <div className="whitespace-pre-wrap">{message.content}</div>
+        ) : (
+          <MarkdownRenderer content={message.content} />
+        )}
       </div>
     </div>
   );
