@@ -19,15 +19,22 @@ export type ContextDomain =
   | "symbols"
   | "knowledgeGraph";
 
+export interface SourceReference {
+  name: string;
+  path: string;
+}
+
 export interface RepositoryChatMetadata {
   repository: string;
   contextUsed: ContextDomain[];
+  sources?: SourceReference[];
 }
 
 export interface RepositoryChatResponse {
   success: boolean;
   answer: string;
   metadata: RepositoryChatMetadata;
+  sources?: SourceReference[];
 }
 
 // ── Service ──────────────────────────────────────────────────────────────────
@@ -44,7 +51,7 @@ export const repositoryChatService = {
    * Ask a single question about a repository.
    *
    * @param request - { repository, question }
-   * @returns { success, answer, metadata }
+   * @returns { success, answer, metadata, sources }
    * @throws AxiosError if the request fails or the server returns an error
    */
   async ask(request: RepositoryChatRequest): Promise<RepositoryChatResponse> {

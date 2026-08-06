@@ -2,6 +2,8 @@ import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
 import MarkdownRenderer from "./markdown-renderer";
 import ChatMessageActions from "./chat-message-actions";
+import ChatSources from "./chat-sources";
+import { SourceReference } from "@/services/repository-chat-service";
 
 export type MessageRole = "user" | "assistant";
 
@@ -9,16 +11,19 @@ export interface ChatMessageItem {
   id: string;
   role: MessageRole;
   content: string;
+  sources?: SourceReference[];
 }
 
 interface ChatMessageProps {
   message: ChatMessageItem;
+  repositoryName?: string;
   onRegenerate?: (id: string) => void;
   isLoading?: boolean;
 }
 
 export default function ChatMessage({
   message,
+  repositoryName,
   onRegenerate,
   isLoading = false,
 }: ChatMessageProps) {
@@ -65,7 +70,15 @@ export default function ChatMessage({
           {isUser ? (
             <div className="whitespace-pre-wrap">{message.content}</div>
           ) : (
-            <MarkdownRenderer content={message.content} />
+            <>
+              <MarkdownRenderer content={message.content} />
+              {message.sources && message.sources.length > 0 && (
+                <ChatSources
+                  sources={message.sources}
+                  repositoryName={repositoryName}
+                />
+              )}
+            </>
           )}
         </div>
 

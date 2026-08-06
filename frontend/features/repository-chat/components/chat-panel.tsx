@@ -46,6 +46,7 @@ export default function ChatPanel({ repositoryName }: ChatPanelProps) {
         <div className="flex flex-1 flex-col overflow-hidden p-4">
           <ChatMessageList
             messages={messages}
+            repositoryName={repositoryName}
             isLoading={isLoading}
             onRegenerate={regenerateMessage}
           />

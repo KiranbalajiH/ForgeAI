@@ -7,18 +7,20 @@ import ChatMessage, { ChatMessageItem } from "./chat-message";
 
 interface ChatMessageListProps {
   messages: ChatMessageItem[];
+  repositoryName?: string;
   isLoading?: boolean;
   onRegenerate?: (id: string) => void;
 }
 
 export default function ChatMessageList({
   messages,
+  repositoryName,
   isLoading = false,
   onRegenerate,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Requirement 3: Auto Scroll (Smooth scrolling to newest message)
+  // Auto Scroll to newest message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
@@ -68,12 +70,13 @@ export default function ChatMessageList({
           <ChatMessage
             key={message.id}
             message={message}
+            repositoryName={repositoryName}
             onRegenerate={onRegenerate}
             isLoading={isLoading}
           />
         ))}
 
-        {/* Requirement 4: Loading Experience (Typing indicator) */}
+        {/* Loading Experience (Typing indicator) */}
         {isLoading && (
           <div className="flex items-center gap-3 text-sm">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-muted text-muted-foreground">

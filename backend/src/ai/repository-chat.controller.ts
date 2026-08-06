@@ -9,7 +9,12 @@ const repositoryChatService = new RepositoryChatService();
  * Exposes:
  *   POST /api/chat/repository
  *     Body:    { repository: string, question: string }
- *     Returns: { success: true, answer: string, metadata: { repository, contextUsed } }
+ *     Returns: {
+ *                success: true,
+ *                answer: string,
+ *                metadata: { repository, contextUsed, sources },
+ *                sources: Array<{ name, path }>
+ *              }
  */
 export class RepositoryChatController {
   async ask(req: Request, res: Response) {
@@ -30,7 +35,7 @@ export class RepositoryChatController {
         });
       }
 
-      const { answer, contextUsed } = await repositoryChatService.ask(
+      const { answer, contextUsed, sources } = await repositoryChatService.ask(
         repository.trim(),
         question.trim()
       );
@@ -41,7 +46,9 @@ export class RepositoryChatController {
         metadata: {
           repository: repository.trim(),
           contextUsed,
+          sources,
         },
+        sources,
       });
     } catch (error: any) {
       console.error("[RepositoryChatController] Error:", error);

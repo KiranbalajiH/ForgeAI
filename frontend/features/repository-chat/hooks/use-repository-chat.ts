@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { repositoryChatService } from "@/services/repository-chat-service";
+import {
+  repositoryChatService,
+  SourceReference,
+} from "@/services/repository-chat-service";
 import { ChatMessageItem } from "@/features/repository-chat/components/chat-message";
 
 interface UseRepositoryChatOptions {
@@ -26,7 +29,7 @@ interface UseRepositoryChatReturn {
  * - input            : current textarea value
  * - isLoading        : true while waiting for API response
  * - error            : user-friendly error string, null when no error
- * - sendMessage      : submits current input, appends user message + AI response
+ * - sendMessage      : submits current input, appends user message + AI response (with sources)
  * - regenerateMessage: re-sends the previous user question for a specific AI response
  */
 export function useRepositoryChat({
@@ -60,11 +63,15 @@ export function useRepositoryChat({
         question,
       });
 
-      // 3. Append the AI response
+      const sources: SourceReference[] =
+        response.metadata?.sources ?? response.sources ?? [];
+
+      // 3. Append the AI response with source citations
       const assistantMessage: ChatMessageItem = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: response.answer,
+        sources,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -92,11 +99,9 @@ export function useRepositoryChat({
     async (targetMessageId: string) => {
       if (isLoading) return;
 
-      // Find the index of the target message
       const index = messages.findIndex((m) => m.id === targetMessageId);
       if (index === -1) return;
 
-      // Find the preceding user message
       const precedingUserMsg = messages
         .slice(0, index)
         .reverse()
@@ -113,7 +118,6 @@ export function useRepositoryChat({
       setIsLoading(true);
       setError(null);
 
-      // Remove the target message from history
       setMessages((prev) => prev.filter((m) => m.id !== targetMessageId));
 
       try {
@@ -122,10 +126,14 @@ export function useRepositoryChat({
           question: questionToResend,
         });
 
+        const sources: SourceReference[] =
+          response.metadata?.sources ?? response.sources ?? [];
+
         const newAssistantMsg: ChatMessageItem = {
           id: `assistant-${Date.now()}`,
           role: "assistant",
           content: response.answer,
+          sources,
         };
 
         setMessages((prev) => [...prev, newAssistantMsg]);
