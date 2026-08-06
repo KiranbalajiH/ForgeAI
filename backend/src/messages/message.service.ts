@@ -1,9 +1,10 @@
 import { PrismaClient, Message } from "@prisma/client";
 import { CreateMessageInput } from "./message.validation";
-import { generateResponse } from "../ai/ai.service";
-import { AIMessage } from "../ai/ai.types";
+import { LLMService } from "../ai/llm.service";
+import { LLMMessage } from "../ai/providers/llm-provider";
 
 const prisma = new PrismaClient();
+const llmService = new LLMService();
 
 export async function createMessageWithAI(
   sessionId: string,
@@ -28,13 +29,13 @@ export async function createMessageWithAI(
     },
   });
 
-  const messages: AIMessage[] = history.map((msg: Message) => ({
+  const messages: LLMMessage[] = history.map((msg: Message) => ({
     role: msg.role === "assistant" ? "assistant" : "user",
     content: msg.content,
   }));
 
   // Generate AI response
-  const aiResponse = await generateResponse(messages);
+  const aiResponse = await llmService.chatMessages(messages);
 
   // Save assistant response
   const assistantMessage = await prisma.message.create({

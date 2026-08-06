@@ -1,4 +1,5 @@
 import path from "path";
+import { analysisCacheService } from "../ai/analysis-cache.service";
 
 import { FileService } from "./file.service";
 import { SupportedFileService } from "./supported-file.service";
@@ -177,7 +178,7 @@ export class AnalysisPipelineService {
         files.length
       );
 
-    return {
+    const result: RepositoryAnalysisResult = {
       repository: repoName,
 
       project,
@@ -200,5 +201,10 @@ export class AnalysisPipelineService {
       totalFiles: files.length,
       files,
     };
+
+    // Store in cache so the chat layer can consume it without re-analyzing
+    analysisCacheService.set(repoName, result);
+
+    return result;
   }
 }

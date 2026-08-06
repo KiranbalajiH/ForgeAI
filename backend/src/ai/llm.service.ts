@@ -11,4 +11,12 @@ export class LLMService {
   async chat(prompt: string): Promise<string> {
     return this.provider.chat(prompt);
   }
+
+  async chatMessages(messages: import("./providers/llm-provider").LLMMessage[]): Promise<string> {
+    return this.provider.chatMessages(messages);
+  }
+
+  streamChat(messages: import("./providers/llm-provider").LLMMessage[]): AsyncGenerator<string, void, unknown> {
+    return this.provider.streamChat(messages);
+  }
 }
