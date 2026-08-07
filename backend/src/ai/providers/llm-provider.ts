@@ -3,7 +3,17 @@ export interface LLMMessage {
   content: string;
 }
 
+export interface ProviderHealthCheckResult {
+  isHealthy: boolean;
+  responseTimeMs: number;
+  error?: string;
+}
+
 export interface LLMProvider {
+  getProviderName(): string;
+  getSupportedModels(): string[];
+  checkHealth(): Promise<ProviderHealthCheckResult>;
+  
   chat(prompt: string): Promise<string>;
   chatMessages(messages: LLMMessage[]): Promise<string>;
   streamChat(messages: LLMMessage[]): AsyncGenerator<string, void, unknown>;

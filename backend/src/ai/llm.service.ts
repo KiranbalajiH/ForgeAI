@@ -1,22 +1,34 @@
-import { OpenRouterProvider } from "./providers/openrouter.provider";
-import { LLMProvider } from "./providers/llm-provider";
+import { LLMProvider as AIProvider, LLMMessage as AIMessage } from "./providers/llm-provider";
+import { ProviderSelectionService, defaultProviderSelectionService } from "./providers/provider-selection.service";
+import { AIConfigService } from "./ai-config.service";
 
 export class LLMService {
-  private provider: LLMProvider;
+  private selectionService: ProviderSelectionService;
+  // Retain fixed provider support for backwards compatibility if passed explicitly
+  private fixedProvider?: AIProvider;
 
-  constructor() {
-    this.provider = new OpenRouterProvider();
+  constructor(provider?: AIProvider, configService?: AIConfigService, selectionService?: ProviderSelectionService) {
+    this.fixedProvider = provider;
+    this.selectionService = selectionService ?? defaultProviderSelectionService;
+  }
+
+  private async getActiveProvider(): Promise<AIProvider> {
+    if (this.fixedProvider) return this.fixedProvider;
+    return this.selectionService.selectProvider();
   }
 
   async chat(prompt: string): Promise<string> {
-    return this.provider.chat(prompt);
+    const provider = await this.getActiveProvider();
+    return provider.chat(prompt);
   }
 
-  async chatMessages(messages: import("./providers/llm-provider").LLMMessage[]): Promise<string> {
-    return this.provider.chatMessages(messages);
+  async chatMessages(messages: import("./providers/llm-provider").LLMMessage[] | AIMessage[]): Promise<string> {
+    const provider = await this.getActiveProvider();
+    return provider.chatMessages(messages as AIMessage[]);
   }
 
-  streamChat(messages: import("./providers/llm-provider").LLMMessage[]): AsyncGenerator<string, void, unknown> {
-    return this.provider.streamChat(messages);
+  async *streamChat(messages: import("./providers/llm-provider").LLMMessage[] | AIMessage[]): AsyncGenerator<string, void, unknown> {
+    const provider = await this.getActiveProvider();
+    yield* provider.streamChat(messages as AIMessage[]);
   }
 }

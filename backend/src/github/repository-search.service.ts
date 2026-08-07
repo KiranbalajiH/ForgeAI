@@ -6,7 +6,9 @@ import {
 import {
   RelevanceScoringService,
   SearchCandidate,
+  SearchIntent,
 } from "./relevance-scoring.service";
+import { RETRIEVAL_CONFIG } from "../config/retrieval.config";
 
 export interface SearchMatch extends SearchCandidate {
   id: string;
@@ -25,17 +27,18 @@ export interface SearchResult {
   services: SearchMatch[];
   routes: SearchMatch[];
   models: SearchMatch[];
+  intent?: SearchIntent;
 }
 
 /**
  * RepositorySearchService
  *
- * Responsibility: Performs fast, provider-agnostic, keyword-based search over an
+ * Responsibility: Performs fast, provider-agnostic, intent-aware keyword-based search over an
  * in-memory RepositoryIndex using RelevanceScoringService to compute and rank relevance scores.
- * Returns top 10 results per category.
+ * Uses configurable maxSearchResults from RETRIEVAL_CONFIG.
  *
  * Exposes:
- *  search(repositoryName: string, query: string): SearchResult
+ *  search(repositoryName: string, query: string, intent?: SearchIntent): SearchResult
  */
 export class RepositorySearchService {
   private indexService: RepositoryIndexService;
@@ -54,9 +57,13 @@ export class RepositorySearchService {
    *
    * @param repositoryName - Repository name/slug
    * @param query - Keyword query string
-   * @returns SearchResult object containing ranked top 10 matches per category
+   * @param intent - Optional pre-classified SearchIntent
+   * @returns SearchResult object containing ranked top matches per category
    */
-  search(repositoryName: string, query: string): SearchResult {
+  search(repositoryName: string, query: string, intent?: SearchIntent): SearchResult {
+    const searchIntent = intent ?? this.scoringService.classifyIntent(query);
+    const limit = RETRIEVAL_CONFIG.maxSearchResults;
+
     const result: SearchResult = {
       files: [],
       symbols: [],
@@ -64,6 +71,7 @@ export class RepositorySearchService {
       services: [],
       routes: [],
       models: [],
+      intent: searchIntent,
     };
 
     if (!query || !query.trim()) {
@@ -80,15 +88,18 @@ export class RepositorySearchService {
       return result;
     }
 
-    // Deduplication maps for file-based entity candidates
+    // Deduplication maps for entity candidates
     const filesMap = new Map<string, SearchMatch>();
     const controllersMap = new Map<string, SearchMatch>();
     const servicesMap = new Map<string, SearchMatch>();
+    const symbolsMap = new Map<string, SearchMatch>();
+    const routesMap = new Map<string, SearchMatch>();
+    const modelsMap = new Map<string, SearchMatch>();
 
-    // 2. Filter and categorize matching chunks using RelevanceScoringService
+    // 2. Filter and categorize matching chunks using RelevanceScoringService with intent-awareness
     for (const chunk of indexedRepo.chunks) {
-      const score = this.scoringService.score(query, chunk);
-      if (score <= 0) continue;
+      const score = this.scoringService.score(query, chunk, searchIntent);
+      if (score < RETRIEVAL_CONFIG.minRelevanceScore) continue;
 
       const match: SearchMatch = {
         id: chunk.id,
@@ -102,7 +113,8 @@ export class RepositorySearchService {
 
       switch (chunk.type) {
         case "file":
-        case "module": {
+        case "module":
+        case "summary": {
           const key = chunk.filePath || chunk.name;
           const existing = filesMap.get(key);
           if (!existing || match.score > existing.score) {
@@ -129,47 +141,62 @@ export class RepositorySearchService {
           break;
         }
 
-        case "symbol":
-          result.symbols.push(match);
+        case "symbol": {
+          const key = chunk.id;
+          const existing = symbolsMap.get(key);
+          if (!existing || match.score > existing.score) {
+            symbolsMap.set(key, match);
+          }
           break;
+        }
 
-        case "apiRoute":
-          result.routes.push(match);
+        case "apiRoute": {
+          const key = chunk.id;
+          const existing = routesMap.get(key);
+          if (!existing || match.score > existing.score) {
+            routesMap.set(key, match);
+          }
           break;
+        }
 
-        case "databaseModel":
-          result.models.push(match);
+        case "databaseModel": {
+          const key = chunk.id;
+          const existing = modelsMap.get(key);
+          if (!existing || match.score > existing.score) {
+            modelsMap.set(key, match);
+          }
           break;
+        }
 
         default:
           break;
       }
     }
 
-    // 3. Delegate ranking of matches within each category and return top 10 results
+    // 3. Delegate ranking of matches within each category and return top matches based on limit
     result.files = this.scoringService
-      .rank(query, Array.from(filesMap.values()))
-      .slice(0, 10);
+      .rank(query, Array.from(filesMap.values()), searchIntent)
+      .slice(0, limit);
 
     result.controllers = this.scoringService
-      .rank(query, Array.from(controllersMap.values()))
-      .slice(0, 10);
+      .rank(query, Array.from(controllersMap.values()), searchIntent)
+      .slice(0, limit);
 
     result.services = this.scoringService
-      .rank(query, Array.from(servicesMap.values()))
-      .slice(0, 10);
+      .rank(query, Array.from(servicesMap.values()), searchIntent)
+      .slice(0, limit);
 
     result.symbols = this.scoringService
-      .rank(query, result.symbols)
-      .slice(0, 10);
+      .rank(query, Array.from(symbolsMap.values()), searchIntent)
+      .slice(0, limit);
 
     result.routes = this.scoringService
-      .rank(query, result.routes)
-      .slice(0, 10);
+      .rank(query, Array.from(routesMap.values()), searchIntent)
+      .slice(0, limit);
 
     result.models = this.scoringService
-      .rank(query, result.models)
-      .slice(0, 10);
+      .rank(query, Array.from(modelsMap.values()), searchIntent)
+      .slice(0, limit);
 
     return result;
   }

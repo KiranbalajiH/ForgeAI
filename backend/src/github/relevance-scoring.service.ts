@@ -1,4 +1,5 @@
 import path from "path";
+import { RETRIEVAL_CONFIG } from "../config/retrieval.config";
 
 export interface SearchCandidate {
   id?: string;
@@ -10,138 +11,316 @@ export interface SearchCandidate {
   metadata?: Record<string, any>;
 }
 
+export type SearchIntent =
+  | "Code Explanation"
+  | "Symbol Lookup"
+  | "Error Investigation"
+  | "File Discovery"
+  | "Architecture Question"
+  | "General Search";
+
+/**
+ * Splits camelCase, PascalCase, kebab-case, snake_case, and dot-separated strings into lowercase word tokens.
+ */
+function tokenize(str: string): string[] {
+  if (!str) return [];
+  const expanded = str
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  return expanded
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 0);
+}
+
+/**
+ * Common developer query synonyms and abbreviations.
+ */
+const SYNONYMS: Record<string, string[]> = {
+  authentication: ["auth", "login", "jwt", "session"],
+  auth: ["authentication", "login", "jwt", "session"],
+  repository: ["repo", "store"],
+  repo: ["repository", "store"],
+  database: ["db", "prisma", "sql", "model"],
+  db: ["database", "prisma", "sql", "model"],
+  middleware: ["interceptor", "filter", "guard"],
+  chat: ["message", "conversation"],
+  analysis: ["analyzer", "pipeline", "summary"],
+};
+
 /**
  * RelevanceScoringService
  *
  * Responsibility: Ranks and scores search candidates against a query using heuristic rules:
+ *  - Configurable minimum relevance score threshold (from RETRIEVAL_CONFIG)
+ *  - Intent classification (Code Explanation, Symbol Lookup, Error Investigation, File Discovery, Architecture Question, General Search)
  *  - Exact symbol, filename, controller/service name match
- *  - Domain-aware folder relevance (e.g. "authentication" prefers auth/, middleware/, jwt/)
- *  - Higher scoring for filenames over file content
- *  - Higher scoring for symbols over filenames when equally matched
- *  - Ignoring generated files, node_modules, and prompt templates (unless query is AI-related)
+ *  - Supports exact, prefix, substring, camelCase, kebab-case, and snake_case matching
+ *  - Domain-aware folder relevance and intent-specific scoring boosts
+ *  - Ignoring generated files, node_modules, and build output
  *
  * Exposes:
- *  - score(query: string, candidate: SearchCandidate): number
- *  - rank<T extends SearchCandidate>(query: string, candidates: T[]): T[]
+ *  - classifyIntent(query: string): SearchIntent
+ *  - score(query: string, candidate: SearchCandidate, intent?: SearchIntent): number
+ *  - rank<T extends SearchCandidate>(query: string, candidates: T[], intent?: SearchIntent): T[]
  */
 export class RelevanceScoringService {
   /**
-   * Calculates a relevance score for a single candidate based on heuristic rules.
+   * Classifies user queries into one of 6 search intents using rule-based heuristics.
+   */
+  classifyIntent(query: string): SearchIntent {
+    if (!query || !query.trim()) return "General Search";
+    const q = query.trim().toLowerCase();
+
+    // 1. Code Explanation
+    if (
+      /\b(explain|how does|how do|what does|walkthrough|understand|describe|implementation|works?|logic|details)\b/i.test(
+        q
+      )
+    ) {
+      return "Code Explanation";
+    }
+
+    // 2. File Discovery
+    if (
+      /\b(file|path|location|directory|folder|where is|locate)\b/i.test(q) ||
+      /\.[a-z0-9]{1,4}$/i.test(q)
+    ) {
+      return "File Discovery";
+    }
+
+    // 3. Architecture Question
+    if (
+      /\b(architecture|structure|components|design|overview|flow|diagram|dependencies|relationships|system|stack)\b/i.test(
+        q
+      )
+    ) {
+      return "Architecture Question";
+    }
+
+    // 4. Error Investigation
+    if (
+      /\b(error|exception|bug|issue|fail(ing|s|ed)?|crash|stack\s*trace|fix|catch|throw|invalid|broken|logs?|validator|validation)\b/i.test(
+        q
+      )
+    ) {
+      return "Error Investigation";
+    }
+
+    // 5. Symbol Lookup
+    if (
+      /\b(function|method|class|interface|type|enum|symbol|constant|variable)\b/i.test(
+        q
+      ) ||
+      /^symbol\s+/i.test(q)
+    ) {
+      return "Symbol Lookup";
+    }
+
+    // Default fallback
+    return "General Search";
+  }
+
+  /**
+   * Calculates a relevance score for a single candidate based on heuristic rules & intent boosts.
    *
    * @param query - Raw or normalized search query
    * @param candidate - Search candidate chunk or match object
+   * @param intent - Optional pre-classified SearchIntent
    * @returns Relevance score (0 if candidate is ignored or non-matching)
    */
-  score(query: string, candidate: SearchCandidate): number {
+  score(query: string, candidate: SearchCandidate, intent?: SearchIntent): number {
     if (!query || !query.trim() || !candidate) {
       return 0;
     }
 
     const normQuery = query.trim().toLowerCase();
 
-    // 1. Filter out ignored files (node_modules, generated files, prompt templates)
-    if (this.isIgnored(candidate, normQuery)) {
+    // 1. Filter out ignored files (node_modules, generated files, build output)
+    if (this.isIgnored(candidate)) {
       return 0;
     }
 
-    const normName = (candidate.name || "").toLowerCase();
-    const normPath = candidate.filePath ? candidate.filePath.toLowerCase() : "";
-    const fileName = candidate.filePath
-      ? path.basename(candidate.filePath).toLowerCase()
-      : normName;
-    const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
-    const normContent = (candidate.content || "").toLowerCase();
+    const name = candidate.name || "";
+    const filePath = candidate.filePath || "";
+    const fileName = filePath ? path.basename(filePath) : name;
+    const fileNameNoExt = fileName.replace(/\.[^/.]+$/, "");
+    const content = candidate.content || "";
 
     const isSymbol = candidate.type === "symbol";
     const isController = candidate.type === "controller";
     const isService = candidate.type === "service";
-    const isFile = candidate.type === "file" || candidate.type === "module";
+    const isFile = candidate.type === "file" || candidate.type === "module" || candidate.type === "summary";
+    const isRoute = candidate.type === "apiRoute";
+    const isModel = candidate.type === "databaseModel";
+
+    // Build tokenized representations
+    const queryTokens = tokenize(normQuery);
+    const nameTokens = tokenize(name);
+    const fileTokens = tokenize(fileNameNoExt);
+    const pathTokens = tokenize(filePath);
+
+    // Expand search terms with synonyms & tokens
+    const searchTerms = new Set<string>([normQuery, ...queryTokens]);
+    for (const term of Array.from(searchTerms)) {
+      const syns = SYNONYMS[term];
+      if (syns) {
+        syns.forEach((s) => searchTerms.add(s));
+      }
+    }
+
+    const nameNorm = name.toLowerCase();
+    const fileNameNorm = fileName.toLowerCase();
+    const filePathNorm = filePath.toLowerCase();
+    const contentNorm = content.toLowerCase();
+
+    const nameKebab = nameTokens.join("-");
+    const nameSnake = nameTokens.join("_");
+    const nameCamel = nameTokens.join("");
 
     let baseScore = 0;
 
-    // 2. Exact Symbol Match (Requirement 2 & 6: Symbols score higher than filenames)
-    if (isSymbol && (normName === normQuery || normName.replace(/^[^a-zA-Z0-9]+/, "") === normQuery)) {
-      baseScore = 100;
+    for (const qTerm of Array.from(searchTerms)) {
+      if (!qTerm) continue;
+
+      // 2. Exact Symbol / Model / Filename / Controller / Service Match
+      if (isSymbol && (nameNorm === qTerm || nameTokens.includes(qTerm))) {
+        baseScore = Math.max(baseScore, 100);
+      } else if ((isController || isService) && (nameNorm === qTerm || fileTokens.includes(qTerm) || nameTokens.includes(qTerm))) {
+        baseScore = Math.max(baseScore, 99);
+      } else if (isModel && (nameNorm === qTerm || nameTokens.includes(qTerm))) {
+        baseScore = Math.max(baseScore, 98);
+      } else if (isFile && (fileNameNorm === qTerm || fileTokens.includes(qTerm) || nameNorm === qTerm)) {
+        baseScore = Math.max(baseScore, 98);
+      } else if (nameNorm === qTerm || nameKebab === qTerm || nameSnake === qTerm || nameCamel === qTerm) {
+        baseScore = Math.max(baseScore, 96);
+      } else if (isRoute && (nameNorm === qTerm || filePathNorm.includes(qTerm) || (candidate.metadata?.path && String(candidate.metadata.path).toLowerCase().includes(qTerm)))) {
+        baseScore = Math.max(baseScore, 96);
+      }
+
+      // 3. Prefix Match (camelCase, kebab-case, snake_case, tokens, filename, path)
+      else if (
+        nameNorm.startsWith(qTerm) ||
+        fileNameNorm.startsWith(qTerm) ||
+        nameKebab.startsWith(qTerm) ||
+        nameSnake.startsWith(qTerm) ||
+        nameCamel.startsWith(qTerm) ||
+        nameTokens.some((t) => t.startsWith(qTerm)) ||
+        fileTokens.some((t) => t.startsWith(qTerm))
+      ) {
+        const score = isSymbol ? 86 : isController || isService ? 84 : 83;
+        baseScore = Math.max(baseScore, score);
+      } else if (filePathNorm.startsWith(qTerm) || pathTokens.some((t) => t.startsWith(qTerm))) {
+        baseScore = Math.max(baseScore, 80);
+      }
+
+      // 4. Substring Match (camelCase, kebab-case, snake_case, tokens, filename, path)
+      else if (
+        nameNorm.includes(qTerm) ||
+        fileNameNorm.includes(qTerm) ||
+        nameKebab.includes(qTerm) ||
+        nameSnake.includes(qTerm) ||
+        nameCamel.includes(qTerm) ||
+        nameTokens.some((t) => t.includes(qTerm)) ||
+        fileTokens.some((t) => t.includes(qTerm))
+      ) {
+        const score = isSymbol ? 66 : isController || isService ? 62 : 60;
+        baseScore = Math.max(baseScore, score);
+      } else if (filePathNorm.includes(qTerm) || pathTokens.some((t) => t.includes(qTerm))) {
+        baseScore = Math.max(baseScore, 55);
+      }
+
+      // 5. Content Substring Fallback
+      else if (contentNorm.includes(qTerm)) {
+        baseScore = Math.max(baseScore, 20);
+      }
     }
 
-    // 3. Exact Controller / Service Name Match (Requirement 3)
-    else if (
-      (isController || isService) &&
-      (normName === normQuery ||
-        fileNameWithoutExt === normQuery ||
-        fileNameWithoutExt.replace(/\.(controller|service)$/i, "") === normQuery)
-    ) {
-      baseScore = 99;
+    // Candidate MUST have a keyword or content match to receive a positive score
+    if (baseScore <= 0) {
+      return 0;
     }
 
-    // 4. Exact Filename Match (Requirement 1)
-    else if (isFile && (fileName === normQuery || fileNameWithoutExt === normQuery || normPath === normQuery)) {
-      baseScore = 98;
-    } else if (normName === normQuery || normPath === normQuery) {
-      baseScore = 96;
-    }
+    // 6. Folder Relevance Boost
+    const folderBoost = this.getFolderBoost(filePath, normQuery);
 
-    // 5. Prefix Match Heuristics
-    else if (normName.startsWith(normQuery) || fileName.startsWith(normQuery)) {
-      baseScore = isSymbol ? 86 : isController || isService ? 84 : 83;
-    } else if (normPath.startsWith(normQuery)) {
-      baseScore = 80;
-    }
-
-    // 6. Substring Match Heuristics
-    else if (normName.includes(normQuery) || fileName.includes(normQuery)) {
-      baseScore = isSymbol ? 66 : isController || isService ? 62 : 60;
-    } else if (normPath.includes(normQuery)) {
-      baseScore = 55;
-    }
-
-    // 7. API Route Path Heuristics
-    else if (candidate.type === "apiRoute" && candidate.metadata?.path) {
-      const routePath = String(candidate.metadata.path).toLowerCase();
-      if (routePath === normQuery) baseScore = 96;
-      else if (routePath.startsWith(normQuery)) baseScore = 82;
-      else if (routePath.includes(normQuery)) baseScore = 60;
-    }
-
-    // 8. Content Substring Fallback (Requirement 5: Filenames score higher than content)
-    else if (normContent.includes(normQuery)) {
-      baseScore = 18;
-    }
-
-    // If still zero, we may still get boosts from folder relevance or path length.
-    // Previously the method returned early here, causing folder boosts to be ignored.
-    // We now proceed to compute boosts even when baseScore is zero.
-    // Note: Ignored candidates are handled earlier.
-    // 9. Folder Relevance Boost (Requirement 4: e.g. "authentication" prefers auth/, middleware/, jwt/)
-    const folderBoost = this.getFolderBoost(candidate.filePath, normQuery);
-
-    // 10. Path Length Boost (Shorter paths get slightly higher score)
+    // 7. Path Length Boost (Shorter paths get slightly higher score)
     let pathBoost = 0;
-    if (candidate.filePath) {
-      const pathDepth = candidate.filePath.split(/[/\\]/).filter(Boolean).length;
+    if (filePath) {
+      const pathDepth = filePath.split(/[/\\]/).filter(Boolean).length;
       pathBoost = Math.max(0, 5 - pathDepth * 0.5);
     }
 
-    // 11. Symbol Tie-Breaker (Requirement 6: Symbols score higher than filenames when equally matched)
+    // 8. Symbol Tie-Breaker
     const symbolBonus = isSymbol ? 0.5 : 0;
 
-    const finalScore = baseScore + folderBoost + pathBoost + symbolBonus;
-    return finalScore > 0 ? finalScore : 0;
+    // 9. Intent-Aware Boosts
+    const searchIntent = intent ?? this.classifyIntent(query);
+    let intentBoost = 0;
+
+    switch (searchIntent) {
+      case "Code Explanation":
+        if (candidate.type === "file" || candidate.type === "service") {
+          intentBoost += 15;
+        }
+        break;
+
+      case "Symbol Lookup":
+        if (isSymbol) {
+          intentBoost += 25;
+        }
+        break;
+
+      case "Error Investigation":
+        const isErrorContext =
+          /[/\\](middleware|validator|error|exception|logger|log)[/\\]/i.test(filePath) ||
+          /\b(error|exception|catch|throw|validate|middleware)\b/i.test(name);
+        if (isErrorContext) {
+          intentBoost += 25;
+        }
+        break;
+
+      case "File Discovery":
+        if (isFile) {
+          intentBoost += 20;
+        }
+        break;
+
+      case "Architecture Question":
+        if (
+          isController ||
+          isService ||
+          isRoute ||
+          isModel ||
+          candidate.type === "relationship"
+        ) {
+          intentBoost += 20;
+        }
+        break;
+
+      default:
+        break;
+    }
+
+    const finalScore = baseScore + folderBoost + pathBoost + symbolBonus + intentBoost;
+    return finalScore >= RETRIEVAL_CONFIG.minRelevanceScore ? finalScore : 0;
   }
 
   /**
    * Evaluates if a search candidate should be ignored.
+   * Strictly ignores node_modules, generated files, and build output.
    */
-  private isIgnored(candidate: SearchCandidate, normQuery: string): boolean {
+  private isIgnored(candidate: SearchCandidate): boolean {
     const filePath = candidate.filePath || "";
+    if (!filePath) return false;
 
-    // Requirement 8: Ignore node_modules
-    if (filePath.includes("node_modules")) {
+    // Ignore node_modules
+    if (/(^|[/\\])node_modules([/\\]|$)/i.test(filePath)) {
       return true;
     }
 
-    // Requirement 7: Ignore generated files
-    const isGeneratedDir = /[/\\](dist|build|\.next|\.output|coverage|\.turbo|\.cache|out)[/\\]/i.test(
+    // Ignore generated files and build outputs
+    const isGeneratedDir = /(^|[/\\])(dist|build|\.next|\.output|coverage|\.turbo|\.cache|out)([/\\]|$)/i.test(
       filePath
     );
     const isGeneratedFile = /\.(min\.js|min\.css|map|lock)$|package-lock\.json|yarn\.lock|pnpm-lock\.yaml/i.test(
@@ -151,36 +330,21 @@ export class RelevanceScoringService {
       return true;
     }
 
-    // Requirement 9: Ignore prompt templates unless query is AI-related
-    const isPromptTemplate =
-      /[/\\]prompts?[/\\]|\.prompt\.(ts|js|md|txt)$|prompt-template/i.test(
-        filePath
-      );
-    const isAiQuery = /\b(ai|prompt|prompts|llm|openai|claude|gpt|system|chat|model|embedding)\b/i.test(
-      normQuery
-    );
-    if (isPromptTemplate && !isAiQuery) {
-      return true;
-    }
-
     return false;
   }
 
   /**
-   * Calculates folder relevance boost (Requirement 4).
-   * Prefer auth/, middleware/, jwt/ for "authentication" query, etc.
+   * Calculates folder relevance boost.
    */
   private getFolderBoost(filePath: string | undefined, normQuery: string): number {
     if (!filePath) return 0;
     const normalizedPath = filePath.toLowerCase();
 
-    // Check direct folder match
     const folders = normalizedPath.split(/[/\\]/);
     if (folders.some((f) => f === normQuery || f.includes(normQuery))) {
       return 15;
     }
 
-    // Domain specific folder preference
     const isAuthQuery = /\b(auth|authentication|login|jwt|token|session|security|permission)\b/i.test(
       normQuery
     );
@@ -226,19 +390,26 @@ export class RelevanceScoringService {
    *
    * @param query - Search query string
    * @param candidates - List of search candidate objects
+   * @param intent - Optional pre-classified SearchIntent
    * @returns Array of candidates sorted by relevance score
    */
-  rank<T extends SearchCandidate>(query: string, candidates: T[]): T[] {
+  rank<T extends SearchCandidate>(
+    query: string,
+    candidates: T[],
+    intent?: SearchIntent
+  ): T[] {
     if (!candidates || candidates.length === 0) {
       return [];
     }
 
+    const searchIntent = intent ?? this.classifyIntent(query);
+
     const scored = candidates
       .map((candidate) => {
-        const computedScore = this.score(query, candidate);
+        const computedScore = this.score(query, candidate, searchIntent);
         return { candidate, score: computedScore };
       })
-      .filter((item) => item.score > 0);
+      .filter((item) => item.score >= RETRIEVAL_CONFIG.minRelevanceScore);
 
     scored.sort((a, b) => {
       if (b.score !== a.score) {

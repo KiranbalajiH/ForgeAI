@@ -15,6 +15,14 @@ import repoRoutes from "./github/repo.routes";
 import aiRoutes from "./ai/ai.routes";
 import repositoryChatRoutes from "./chat/repository-chat.routes";
 import repositorySearchRoutes from "./github/repository-search.routes";
+import repositoryExplainRoutes from "./explain/repository-explain.routes";
+import documentationGenerationRoutes from "./docs/documentation-generation.routes";
+import codeReviewRoutes from "./review/code-review.routes";
+import workspaceAnalysisRoutes from "./workspace/workspace-analysis.routes";
+import refactoringPlannerRoutes from "./refactoring/refactoring-planner.routes";
+import impactAnalysisRoutes from "./impact/impact-analysis.routes";
+import changeRiskAssessmentRoutes from "./risk/change-risk-assessment.routes";
+import aiTaskPlannerRoutes from "./planner/ai-task-planner.routes";
 
 const app = express();
 
@@ -34,6 +42,14 @@ app.use("/repo", repoRoutes);
 app.use("/ai", aiRoutes);
 app.use("/api/chat", repositoryChatRoutes);
 app.use("/api/repositories", repositorySearchRoutes);
+app.use("/api/explain", repositoryExplainRoutes);
+app.use("/api/docs", documentationGenerationRoutes);
+app.use("/api/review", codeReviewRoutes);
+app.use("/api/workspace", workspaceAnalysisRoutes);
+app.use("/api/refactoring", refactoringPlannerRoutes);
+app.use("/api/impact", impactAnalysisRoutes);
+app.use("/api/risk", changeRiskAssessmentRoutes);
+app.use("/api/planner", aiTaskPlannerRoutes);
 
 // Health Check
 app.get("/", (_req, res) => {

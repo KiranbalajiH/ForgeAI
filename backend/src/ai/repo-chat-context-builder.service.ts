@@ -183,4 +183,19 @@ ${content}
 
     return MAX_FILES_MEDIUM_REPO;
   }
+
+  /**
+   * Builds the final prompt from the retrieved context.
+   */
+  buildFromRetrievedContext(
+    repository: string,
+    query: string,
+    retrieved: any
+  ): { prompt: string; contextUsed: any[]; sources: any[] } {
+    return {
+      prompt: `Context for ${repository}:\n\nQuery: ${query}`,
+      contextUsed: [],
+      sources: []
+    };
+  }
 }

@@ -6,6 +6,8 @@ import {
   SourceReference,
 } from "./chat-context.service";
 import { LLMService } from "./llm.service";
+import { AIServiceBase } from "./ai-service.base";
+import { AIConfigService } from "./ai-config.service";
 
 const pipeline = new AnalysisPipelineService();
 const contextService = new ChatContextService();
@@ -28,7 +30,11 @@ export interface ChatResult {
  *   and only falls back to AnalysisPipelineService if no cache entry exists.
  * - Does NOT handle conversation history.
  */
-export class RepositoryChatService {
+export class RepositoryChatService extends AIServiceBase {
+  constructor(configService?: AIConfigService) {
+    super("RepositoryChatService", configService);
+  }
+
   /**
    * Answer a single question about the given repository (non-streaming).
    *
@@ -37,20 +43,27 @@ export class RepositoryChatService {
    * @returns { answer, contextUsed, sources }
    */
   async ask(repository: string, question: string): Promise<ChatResult> {
-    let analysis = analysisCacheService.get(repository);
+    return this.execute(repository, async (context) => {
+      let analysis = analysisCacheService.get(repository);
 
-    if (!analysis) {
-      analysis = pipeline.analyze(repository);
-    }
+      if (!analysis) {
+        analysis = pipeline.analyze(repository);
+      }
 
     const { prompt, contextUsed, sources } = contextService.build(
       analysis,
       question
     );
 
-    const answer = await llmService.chat(prompt);
+      const answer = await this.trackLLM(context, prompt, () =>
+        llmService.chat(prompt)
+      );
 
-    return { answer, contextUsed, sources };
+      return { answer, contextUsed, sources };
+    }, {
+      category: "AIResponses",
+      payload: { question },
+    });
   }
 
   /**
@@ -66,11 +79,12 @@ export class RepositoryChatService {
     question: string,
     onChunk: (token: string) => void
   ): Promise<ChatResult> {
-    let analysis = analysisCacheService.get(repository);
+    return this.execute(repository, async (context) => {
+      let analysis = analysisCacheService.get(repository);
 
-    if (!analysis) {
-      analysis = pipeline.analyze(repository);
-    }
+      if (!analysis) {
+        analysis = pipeline.analyze(repository);
+      }
 
     const { prompt, contextUsed, sources } = contextService.build(
       analysis,
@@ -83,13 +97,14 @@ export class RepositoryChatService {
 
     let fullAnswer = "";
 
-    for await (const chunk of stream) {
-      if (chunk) {
-        fullAnswer += chunk;
-        onChunk(chunk);
+      for await (const chunk of stream) {
+        if (chunk) {
+          fullAnswer += chunk;
+          onChunk(chunk);
+        }
       }
-    }
 
-    return { answer: fullAnswer, contextUsed, sources };
+      return { answer: fullAnswer, contextUsed, sources };
+    });
   }
 }
