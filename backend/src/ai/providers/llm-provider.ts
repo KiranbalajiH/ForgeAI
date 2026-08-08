@@ -14,7 +14,7 @@ export interface LLMProvider {
   getSupportedModels(): string[];
   checkHealth(): Promise<ProviderHealthCheckResult>;
   
-  chat(prompt: string): Promise<string>;
-  chatMessages(messages: LLMMessage[]): Promise<string>;
-  streamChat(messages: LLMMessage[]): AsyncGenerator<string, void, unknown>;
+  chat(prompt: string, model?: string): Promise<string>;
+  chatMessages(messages: LLMMessage[], model?: string): Promise<string>;
+  streamChat(messages: LLMMessage[], model?: string): AsyncGenerator<string, void, unknown>;
 }

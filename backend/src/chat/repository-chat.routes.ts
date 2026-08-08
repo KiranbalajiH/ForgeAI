@@ -6,13 +6,18 @@ const router = Router();
 const chatController = new RepositoryChatController();
 
 /**
+ * GET /api/chat/providers
+ * Returns configured AI providers and models.
+ */
+router.get(
+  "/providers",
+  authenticateToken,
+  chatController.getProviders.bind(chatController)
+);
+
+/**
  * POST /api/chat/repository
- *
- * Single-turn repository Q&A.
- * Protected by JWT (Authorization: Bearer <token>).
- *
- * Body:    { repository: string, question: string }
- * Returns: { success: true, answer: string, metadata: { repository, contextUsed } }
+ * Single-turn / streaming repository Q&A.
  */
 router.post(
   "/repository",

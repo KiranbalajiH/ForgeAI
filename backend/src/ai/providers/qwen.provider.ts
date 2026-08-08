@@ -48,10 +48,12 @@ export class QwenProvider implements AIProvider {
     }
   }
 
-  async chat(prompt: string): Promise<string> {
+  async chat(prompt: string, targetModel?: string): Promise<string> {
     const llmConfig = this.configService.get("llm");
+    const model = targetModel || process.env.QWEN_DEFAULT_MODEL || llmConfig.defaultModel;
+
     const response = await this.client.chat.completions.create({
-      model: process.env.QWEN_DEFAULT_MODEL || llmConfig.defaultModel,
+      model,
       messages: [
         {
           role: "user",
@@ -65,10 +67,12 @@ export class QwenProvider implements AIProvider {
     return response.choices[0]?.message?.content ?? "";
   }
 
-  async chatMessages(messages: AIMessage[]): Promise<string> {
+  async chatMessages(messages: AIMessage[], targetModel?: string): Promise<string> {
     const llmConfig = this.configService.get("llm");
+    const model = targetModel || process.env.QWEN_DEFAULT_MODEL || llmConfig.defaultModel;
+
     const response = await this.client.chat.completions.create({
-      model: process.env.QWEN_DEFAULT_MODEL || llmConfig.defaultModel,
+      model,
       messages,
       temperature: llmConfig.temperature,
       max_tokens: llmConfig.maxTokens,
@@ -77,10 +81,12 @@ export class QwenProvider implements AIProvider {
     return response.choices[0]?.message?.content ?? "";
   }
 
-  async *streamChat(messages: AIMessage[]): AsyncGenerator<string, void, unknown> {
+  async *streamChat(messages: AIMessage[], targetModel?: string): AsyncGenerator<string, void, unknown> {
     const llmConfig = this.configService.get("llm");
+    const model = targetModel || process.env.QWEN_DEFAULT_MODEL || llmConfig.defaultModel;
+
     const stream = await this.client.chat.completions.create({
-      model: process.env.QWEN_DEFAULT_MODEL || llmConfig.defaultModel,
+      model,
       messages,
       temperature: llmConfig.temperature,
       max_tokens: llmConfig.maxTokens,

@@ -1,14 +1,18 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   repositoryChatService,
   SourceReference,
+  AIProviderInfo,
 } from "@/services/repository-chat-service";
 import { ChatMessageItem } from "@/features/repository-chat/components/chat-message";
 
 interface UseRepositoryChatOptions {
   repositoryName: string;
+  initialProvider?: string;
+  initialModel?: string;
+  initialQuestion?: string;
 }
 
 interface UseRepositoryChatReturn {
@@ -16,38 +20,99 @@ interface UseRepositoryChatReturn {
   input: string;
   isLoading: boolean;
   error: string | null;
+  selectedProvider: string;
+  selectedModel: string;
+  availableProviders: AIProviderInfo[];
+  setSelectedProvider: (providerId: string) => void;
+  setSelectedModel: (modelName: string) => void;
   setInput: (value: string) => void;
-  sendMessage: () => Promise<void>;
+  sendMessage: (customQuestion?: string) => Promise<void>;
   regenerateMessage: (messageId: string) => Promise<void>;
 }
 
-/**
- * useRepositoryChat
- *
- * Manages streaming state for Repository Chat:
- * - messages[]       : conversation history displayed in the UI
- * - input            : current textarea value
- * - isLoading        : true while waiting for or receiving streamed tokens
- * - error            : user-friendly error string, null when no error
- * - sendMessage      : streams AI response tokens incrementally
- * - regenerateMessage: re-streams the response for a previous question
- */
 export function useRepositoryChat({
   repositoryName,
+  initialProvider = "default",
+  initialModel = "",
+  initialQuestion = "",
 }: UseRepositoryChatOptions): UseRepositoryChatReturn {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialQuestion);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sendMessage = useCallback(async () => {
-    const question = input.trim();
+  const [selectedProvider, setSelectedProviderState] = useState<string>(initialProvider);
+  const [selectedModel, setSelectedModelState] = useState<string>(initialModel);
+  const [availableProviders, setAvailableProviders] = useState<AIProviderInfo[]>([
+    {
+      id: "openai",
+      name: "OpenAI",
+      models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"],
+    },
+    {
+      id: "nvidia",
+      name: "NVIDIA NIM",
+      models: [
+        "meta/llama-3.1-405b-instruct",
+        "meta/llama-3.1-70b-instruct",
+        "meta/llama-3.1-8b-instruct",
+        "mistralai/mixtral-8x22b-instruct-v0.1",
+        "nvidia/nemotron-4-340b-instruct",
+      ],
+    },
+    {
+      id: "qwen",
+      name: "Qwen",
+      models: ["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long", "qwen-vl-plus", "qwen-vl-max"],
+    },
+  ]);
+
+  // Sync initialQuestion if updated externally
+  useEffect(() => {
+    if (initialQuestion && !input) {
+      setInput(initialQuestion);
+    }
+  }, [initialQuestion]);
+
+  // Load configured providers from backend
+  useEffect(() => {
+    repositoryChatService
+      .getProviders()
+      .then((res) => {
+        if (res.success && res.providers?.length) {
+          setAvailableProviders(res.providers);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch AI providers from backend, using fallback provider list:", err);
+      });
+  }, []);
+
+  const setSelectedProvider = useCallback((providerId: string) => {
+    setSelectedProviderState(providerId);
+    if (providerId === "default") {
+      setSelectedModelState("");
+    } else {
+      const match = availableProviders.find((p) => p.id === providerId);
+      if (match && match.models.length > 0) {
+        setSelectedModelState(match.models[0]);
+      } else {
+        setSelectedModelState("");
+      }
+    }
+  }, [availableProviders]);
+
+  const setSelectedModel = useCallback((modelName: string) => {
+    setSelectedModelState(modelName);
+  }, []);
+
+  const sendMessage = useCallback(async (customQuestion?: string) => {
+    const question = (customQuestion || input).trim();
     if (!question || isLoading) return;
 
     const userMsgId = `user-${Date.now()}`;
     const assistantMsgId = `assistant-${Date.now()}`;
 
-    // 1. Optimistically append user message + empty assistant placeholder
     const userMessage: ChatMessageItem = {
       id: userMsgId,
       role: "user",
@@ -65,9 +130,16 @@ export function useRepositoryChat({
     setIsLoading(true);
     setError(null);
 
-    // 2. Stream tokens incrementally via repositoryChatService
+    const providerParam = selectedProvider !== "default" ? selectedProvider : undefined;
+    const modelParam = selectedModel.trim() || undefined;
+
     await repositoryChatService.streamAsk(
-      { repository: repositoryName, question },
+      {
+        repository: repositoryName,
+        question,
+        provider: providerParam,
+        model: modelParam,
+      },
       (token: string) => {
         setMessages((prev) =>
           prev.map((msg) =>
@@ -102,7 +174,7 @@ export function useRepositoryChat({
         setIsLoading(false);
       }
     );
-  }, [input, isLoading, repositoryName]);
+  }, [input, isLoading, repositoryName, selectedProvider, selectedModel]);
 
   const regenerateMessage = useCallback(
     async (targetMessageId: string) => {
@@ -129,14 +201,21 @@ export function useRepositoryChat({
 
       const newAssistantMsgId = `assistant-${Date.now()}`;
 
-      // Replace old target message with new streaming placeholder
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== targetMessageId),
         { id: newAssistantMsgId, role: "assistant", content: "" },
       ]);
 
+      const providerParam = selectedProvider !== "default" ? selectedProvider : undefined;
+      const modelParam = selectedModel.trim() || undefined;
+
       await repositoryChatService.streamAsk(
-        { repository: repositoryName, question: questionToResend },
+        {
+          repository: repositoryName,
+          question: questionToResend,
+          provider: providerParam,
+          model: modelParam,
+        },
         (token: string) => {
           setMessages((prev) =>
             prev.map((msg) =>
@@ -172,7 +251,7 @@ export function useRepositoryChat({
         }
       );
     },
-    [isLoading, messages, repositoryName]
+    [isLoading, messages, repositoryName, selectedProvider, selectedModel]
   );
 
   return {
@@ -180,6 +259,11 @@ export function useRepositoryChat({
     input,
     isLoading,
     error,
+    selectedProvider,
+    selectedModel,
+    availableProviders,
+    setSelectedProvider,
+    setSelectedModel,
     setInput,
     sendMessage,
     regenerateMessage,

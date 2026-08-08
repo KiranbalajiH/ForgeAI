@@ -17,18 +17,18 @@ export class LLMService {
     return this.selectionService.selectProvider();
   }
 
-  async chat(prompt: string): Promise<string> {
+  async chat(prompt: string, model?: string): Promise<string> {
     const provider = await this.getActiveProvider();
-    return provider.chat(prompt);
+    return provider.chat(prompt, model);
   }
 
-  async chatMessages(messages: import("./providers/llm-provider").LLMMessage[] | AIMessage[]): Promise<string> {
+  async chatMessages(messages: import("./providers/llm-provider").LLMMessage[] | AIMessage[], model?: string): Promise<string> {
     const provider = await this.getActiveProvider();
-    return provider.chatMessages(messages as AIMessage[]);
+    return provider.chatMessages(messages as AIMessage[], model);
   }
 
-  async *streamChat(messages: import("./providers/llm-provider").LLMMessage[] | AIMessage[]): AsyncGenerator<string, void, unknown> {
+  async *streamChat(messages: import("./providers/llm-provider").LLMMessage[] | AIMessage[], model?: string): AsyncGenerator<string, void, unknown> {
     const provider = await this.getActiveProvider();
-    yield* provider.streamChat(messages as AIMessage[]);
+    yield* provider.streamChat(messages as AIMessage[], model);
   }
 }

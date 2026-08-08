@@ -33,7 +33,6 @@ export class OpenAIProvider implements AIProvider {
   async checkHealth(): Promise<import("./llm-provider").ProviderHealthCheckResult> {
     const start = Date.now();
     try {
-      // For health, we can either list models or do a tiny chat. models.list() is fast and cheap.
       await this.client.models.list();
       return {
         isHealthy: true,
@@ -48,10 +47,12 @@ export class OpenAIProvider implements AIProvider {
     }
   }
 
-  async chat(prompt: string): Promise<string> {
+  async chat(prompt: string, targetModel?: string): Promise<string> {
     const llmConfig = this.configService.get("llm");
+    const model = targetModel || process.env.OPENAI_MODEL || process.env.OPENROUTER_MODEL || llmConfig.defaultModel;
+
     const response = await this.client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || process.env.OPENROUTER_MODEL || llmConfig.defaultModel,
+      model,
       messages: [
         {
           role: "user",
@@ -65,10 +66,12 @@ export class OpenAIProvider implements AIProvider {
     return response.choices[0]?.message?.content ?? "";
   }
 
-  async chatMessages(messages: AIMessage[]): Promise<string> {
+  async chatMessages(messages: AIMessage[], targetModel?: string): Promise<string> {
     const llmConfig = this.configService.get("llm");
+    const model = targetModel || process.env.OPENAI_MODEL || process.env.OPENROUTER_MODEL || llmConfig.defaultModel;
+
     const response = await this.client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || process.env.OPENROUTER_MODEL || llmConfig.defaultModel,
+      model,
       messages,
       temperature: llmConfig.temperature,
       max_tokens: llmConfig.maxTokens,
@@ -77,10 +80,12 @@ export class OpenAIProvider implements AIProvider {
     return response.choices[0]?.message?.content ?? "";
   }
 
-  async *streamChat(messages: AIMessage[]): AsyncGenerator<string, void, unknown> {
+  async *streamChat(messages: AIMessage[], targetModel?: string): AsyncGenerator<string, void, unknown> {
     const llmConfig = this.configService.get("llm");
+    const model = targetModel || process.env.OPENAI_MODEL || process.env.OPENROUTER_MODEL || llmConfig.defaultModel;
+
     const stream = await this.client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || process.env.OPENROUTER_MODEL || llmConfig.defaultModel,
+      model,
       messages,
       temperature: llmConfig.temperature,
       max_tokens: llmConfig.maxTokens,

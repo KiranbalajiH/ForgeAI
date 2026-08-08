@@ -7,11 +7,8 @@ export const authService = {
   },
 
   async signup(data: unknown) {
-    console.log("Signup Request:", data);
-
-    // return api.post("/auth/register", data);
-
-    return Promise.resolve();
+    const response = await api.post("/auth/register", data);
+    return response.data;
   },
 
   async forgotPassword(data: unknown) {
