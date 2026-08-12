@@ -39,13 +39,20 @@ function tokenize(str: string): string[] {
 const SYNONYMS: Record<string, string[]> = {
   authentication: ["auth", "login", "jwt", "session"],
   auth: ["authentication", "login", "jwt", "session"],
-  repository: ["repo", "store"],
-  repo: ["repository", "store"],
+  repository: ["repo", "store", "repositories"],
+  repositories: ["repo", "repository", "store"],
+  repo: ["repository", "store", "repositories"],
   database: ["db", "prisma", "sql", "model"],
   db: ["database", "prisma", "sql", "model"],
   middleware: ["interceptor", "filter", "guard"],
   chat: ["message", "conversation"],
   analysis: ["analyzer", "pipeline", "summary"],
+  clone: ["cloned", "cloning", "download"],
+  cloned: ["clone", "cloning", "download"],
+  cloning: ["clone", "cloned", "download"],
+  verify: ["verified", "validate", "check"],
+  verified: ["verify", "validate", "check"],
+  jwt: ["token", "verify"],
 };
 
 /**
@@ -83,7 +90,7 @@ export class RelevanceScoringService {
 
     // 2. File Discovery
     if (
-      /\b(file|path|location|directory|folder|where is|locate)\b/i.test(q) ||
+      /\b(file|path|location|directory|folder|where|locate)\b/i.test(q) ||
       /\.[a-z0-9]{1,4}$/i.test(q)
     ) {
       return "File Discovery";

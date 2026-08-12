@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MessageSquare, Search } from "lucide-react";
+import RepositoryStatusBadge from "./repository-status-badge";
 
 interface RepositoryTableProps {
   repositories: Repository[];
@@ -30,7 +31,7 @@ export default function RepositoryTable({
           <TableRow>
             <TableHead>Repository</TableHead>
             <TableHead>Language</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Index Status</TableHead>
             <TableHead>Health</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -50,12 +51,7 @@ export default function RepositoryTable({
               </TableCell>
 
               <TableCell>
-                <Badge
-                  variant={repo.status === "Active" ? "default" : "secondary"}
-                  className="text-xs"
-                >
-                  {repo.status}
-                </Badge>
+                <RepositoryStatusBadge repoName={repo.name} compact />
               </TableCell>
 
               <TableCell className="font-medium">

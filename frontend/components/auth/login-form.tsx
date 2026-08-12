@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,6 +21,7 @@ import { Label } from "@/components/ui/label";
 export default function LoginForm() {
   const router = useRouter();
   const { login } = useAuth();
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
@@ -31,6 +33,7 @@ export default function LoginForm() {
 
   async function onSubmit(data: LoginFormData) {
     console.log("Submitting form...", data);
+    setServerError(null);
 
     try {
       const response = await authService.login(data);
@@ -49,8 +52,10 @@ export default function LoginForm() {
       login(response.data.token, response.data.user);
 
       router.push("/");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
+      const msg = error?.response?.data?.message || error?.message || "Login failed. Please check your credentials.";
+      setServerError(msg);
     }
   }
 
@@ -59,6 +64,11 @@ export default function LoginForm() {
       onSubmit={handleSubmit(onSubmit)}
       className="space-y-5"
     >
+      {serverError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          {serverError}
+        </div>
+      )}
       <div className="space-y-2">
         <Label>Email</Label>
 

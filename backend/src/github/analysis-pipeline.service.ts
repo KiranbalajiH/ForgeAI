@@ -98,17 +98,44 @@ export class AnalysisPipelineService {
       repoName
     );
 
-    const project =
-      this.projectDetector.detect(repoName);
+    const previous = analysisCacheService.get(repoName);
+    const allFiles = this.fileService.getAllFiles(repoPath);
 
-    const packageInfo =
-      this.packageAnalyzer.analyze(repoName);
+    const filteredFiles = allFiles
+      .filter((file) => this.supportedFileService.isSupported(file.path))
+      .filter((file) => !this.fileFilterService.shouldSkip(file.path, file.size));
 
-    const technology =
-      this.technologyDetector.detect(packageInfo);
+    let changedFilesSet: Set<string> | undefined;
+    let deletedFilesSet: Set<string> | undefined;
 
-    const database =
-      this.databaseAnalyzer.analyze(repoName);
+    if (previous) {
+      changedFilesSet = new Set<string>();
+      deletedFilesSet = new Set<string>();
+      
+      const prevFileMap = new Map(previous.files.map((f: any) => [f.path, f]));
+      
+      for (const file of filteredFiles) {
+        const prevFile = prevFileMap.get(file.path);
+        // Fallback size comparison if mtimeMs is not present yet (from old cache)
+        if (!prevFile || prevFile.size !== file.size || prevFile.mtimeMs !== file.mtimeMs) {
+          changedFilesSet.add(file.path);
+        }
+        if (prevFile) prevFileMap.delete(file.path);
+      }
+      
+      for (const deletedPath of prevFileMap.keys()) {
+        deletedFilesSet.add(deletedPath);
+      }
+      
+      if (changedFilesSet.size === 0 && deletedFilesSet.size === 0 && previous.files.length === filteredFiles.length) {
+        return previous; // No-op
+      }
+    }
+
+    const project = this.projectDetector.detect(repoName);
+    const packageInfo = this.packageAnalyzer.analyze(repoName);
+    const technology = this.technologyDetector.detect(packageInfo);
+    const database = this.databaseAnalyzer.analyze(repoName);
 
     if (database?.provider) {
       technology.database =
@@ -116,93 +143,64 @@ export class AnalysisPipelineService {
         database.provider.slice(1);
     }
 
-    const readme =
-      this.readmeAnalyzer.analyze(repoName);
+    const readme = this.readmeAnalyzer.analyze(repoName);
+    const entryPoint = this.entryPointDetector.detect(repoName);
 
-    const entryPoint =
-      this.entryPointDetector.detect(repoName);
+    const architecture = this.architectureAnalyzer.analyze(repoName, changedFilesSet, deletedFilesSet, previous?.architecture);
+    const dependencies = this.dependencyAnalyzer.analyze(repoName, changedFilesSet, deletedFilesSet, previous?.dependencies);
+    const relationships = this.relationshipAnalyzer.analyze(dependencies);
+    const apiRoutes = this.apiRouteAnalyzer.analyze(repoName, changedFilesSet, deletedFilesSet, previous?.apiRoutes);
+    const symbols = this.symbolAnalyzer.analyze(repoName, changedFilesSet, deletedFilesSet, previous?.symbols);
+    const knowledgeGraph = this.knowledgeGraphService.build(architecture, apiRoutes, symbols);
 
-    const architecture =
-      this.architectureAnalyzer.analyze(repoName);
-
-    const dependencies =
-      this.dependencyAnalyzer.analyze(repoName);
-
-    const relationships =
-      this.relationshipAnalyzer.analyze(
-        dependencies
-      );
-
-    const apiRoutes =
-      this.apiRouteAnalyzer.analyze(repoName);
-
-    const symbols =
-      this.symbolAnalyzer.analyze(repoName);
-
-    const knowledgeGraph =
-      this.knowledgeGraphService.build(
-        architecture,
-        apiRoutes,
-        symbols
-      );
-
-    const allFiles =
-      this.fileService.getAllFiles(repoPath);
-
-    const files = allFiles
-      .filter((file) =>
-        this.supportedFileService.isSupported(
-          file.path
+    const files: any[] = [];
+    if (previous && changedFilesSet && deletedFilesSet) {
+      files.push(
+        ...previous.files.filter(
+          (f: any) => !changedFilesSet!.has(f.path) && !deletedFilesSet!.has(f.path)
         )
-      )
-      .filter(
-        (file) =>
-          !this.fileFilterService.shouldSkip(
-            file.path,
-            file.size
-          )
-      )
-      .map((file) => ({
+      );
+    }
+    
+    // Process only changed files for the file content
+    const filesToProcess = previous && changedFilesSet 
+      ? filteredFiles.filter(f => changedFilesSet!.has(f.path)) 
+      : filteredFiles;
+
+    files.push(
+      ...filesToProcess.map((file) => ({
         path: file.path,
         size: file.size,
-        content: this.fileService.readFile(
-          repoName,
-          file.path
-        ),
-      }));
+        mtimeMs: file.mtimeMs,
+        content: this.fileService.readFile(repoName, file.path),
+      }))
+    );
 
-    const summary =
-      this.summaryGenerator.generate(
-        technology,
-        architecture,
-        files.length
-      );
+    const summary = this.summaryGenerator.generate(
+      technology,
+      architecture,
+      files.length
+    );
 
     const result: RepositoryAnalysisResult = {
       repository: repoName,
-
       project,
       technology,
       summary,
-
       package: packageInfo,
       database,
-
       readme,
       entryPoint,
-
       architecture,
       dependencies,
       relationships,
       apiRoutes,
       symbols,
       knowledgeGraph,
-
       totalFiles: files.length,
       files,
     };
 
-    // Store in cache so the chat layer can consume it without re-analyzing
     analysisCacheService.set(repoName, result);
 
     return result;

@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -16,6 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function SignupForm() {
+  const router = useRouter();
+  const { login } = useAuth();
+  const [serverError, setServerError] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -25,7 +32,18 @@ export default function SignupForm() {
   });
 
   async function onSubmit(data: SignupFormData) {
-    await authService.signup(data);
+    setServerError(null);
+    try {
+      await authService.signup(data);
+      // Auto-login after signup
+      const loginRes = await authService.login({ email: data.email, password: data.password });
+      login(loginRes.data.token, loginRes.data.user);
+      router.push("/");
+    } catch (error: any) {
+      console.error("Signup failed:", error);
+      const msg = error?.response?.data?.message || error?.message || "Failed to create account.";
+      setServerError(msg);
+    }
   }
 
   return (
@@ -33,6 +51,11 @@ export default function SignupForm() {
       onSubmit={handleSubmit(onSubmit)}
       className="space-y-5"
     >
+      {serverError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          {serverError}
+        </div>
+      )}
       <div className="space-y-2">
         <Label>Full Name</Label>
 

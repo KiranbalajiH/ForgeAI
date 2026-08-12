@@ -1,4 +1,5 @@
 import { api } from "@/lib/axios";
+import Cookies from "js-cookie";
 
 export interface RepositoryChatRequest {
   /** The repository slug to ask about (e.g. "ForgeAI") */
@@ -9,6 +10,8 @@ export interface RepositoryChatRequest {
   provider?: string;
   /** Optional model identifier (e.g. "gpt-4o", "qwen-max") */
   model?: string;
+  /** Optional session identifier to continue a conversation */
+  sessionId?: string;
 }
 
 export type ContextDomainCategory =
@@ -30,6 +33,7 @@ export interface SourceReference {
   name: string;
   path: string;
   type?: string;
+  lineNumber?: number;
 }
 
 export interface RepositoryChatMetadata {
@@ -38,6 +42,7 @@ export interface RepositoryChatMetadata {
   model?: string;
   contextUsed: ContextDomain[];
   sources: SourceReference[];
+  sessionId?: string;
 }
 
 export interface RepositoryChatResponse {
@@ -59,6 +64,35 @@ export interface GetProvidersResponse {
   providers: AIProviderInfo[];
 }
 
+export interface ChatSessionSummary {
+  sessionId: string;
+  createdAt: string;
+  title: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  sources?: SourceReference[];
+}
+
+export interface ChatSession {
+  sessionId: string;
+  createdAt: string;
+  messages: ChatMessage[];
+}
+
+export interface GetSessionsResponse {
+  success: boolean;
+  sessions: ChatSessionSummary[];
+}
+
+export interface GetSessionResponse {
+  success: boolean;
+  session: ChatSession;
+}
+
 /**
  * repositoryChatService
  *
@@ -70,6 +104,43 @@ export const repositoryChatService = {
    */
   async getProviders(): Promise<GetProvidersResponse> {
     const response = await api.get<GetProvidersResponse>("/api/chat/providers");
+    return response.data;
+  },
+
+  /**
+   * List chat sessions for a repository.
+   */
+  async getSessions(repoName: string): Promise<GetSessionsResponse> {
+    const response = await api.get<GetSessionsResponse>(`/api/chat/repository/${encodeURIComponent(repoName)}/sessions`);
+    return response.data;
+  },
+
+  /**
+   * Get a specific chat session for a repository.
+   */
+  async getSession(repoName: string, sessionId: string): Promise<GetSessionResponse> {
+    const response = await api.get<GetSessionResponse>(`/api/chat/repository/${encodeURIComponent(repoName)}/sessions/${encodeURIComponent(sessionId)}`);
+    return response.data;
+  },
+
+  /**
+   * Rename a chat session.
+   */
+  async renameSession(repoName: string, sessionId: string, title: string): Promise<{ success: boolean; session: ChatSessionSummary }> {
+    const response = await api.patch<{ success: boolean; session: ChatSessionSummary }>(
+      `/api/chat/repository/${encodeURIComponent(repoName)}/sessions/${encodeURIComponent(sessionId)}`,
+      { title }
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a chat session.
+   */
+  async deleteSession(repoName: string, sessionId: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.delete<{ success: boolean; message: string }>(
+      `/api/chat/repository/${encodeURIComponent(repoName)}/sessions/${encodeURIComponent(sessionId)}`
+    );
     return response.data;
   },
 
@@ -96,12 +167,17 @@ export const repositoryChatService = {
   ): Promise<void> {
     try {
       const baseURL = process.env.NEXT_PUBLIC_API_URL || "";
+      const token = Cookies.get("token");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
 
       const response = await fetch(`${baseURL}/api/chat/repository`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(request),
       });
 
@@ -140,8 +216,8 @@ export const repositoryChatService = {
             const parsed = JSON.parse(jsonStr);
 
             if (parsed.error) {
-              onError(parsed.error);
-              return;
+               onError(parsed.error);
+               return;
             }
 
             if (parsed.token) {

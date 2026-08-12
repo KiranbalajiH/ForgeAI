@@ -13,6 +13,7 @@ export interface SearchMatch {
   content: string;
   score: number;
   metadata?: Record<string, any>;
+  lineNumber?: number;
 }
 
 export interface SearchResult {

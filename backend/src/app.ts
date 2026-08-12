@@ -39,6 +39,7 @@ app.use("/projects/:projectId/chats", chatRoutes);
 app.use("/chats/:sessionId/messages", messageRoutes);
 app.use("/github", githubRoutes);
 app.use("/repo", repoRoutes);
+app.use("/api/repositories", repoRoutes);
 app.use("/ai", aiRoutes);
 app.use("/api/chat", repositoryChatRoutes);
 app.use("/api/repositories", repositorySearchRoutes);

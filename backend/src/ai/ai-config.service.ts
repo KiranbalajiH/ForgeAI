@@ -28,6 +28,7 @@ export interface RetrievalLimitsConfig {
   maxPromptContextSize: number;
   minRelevanceScore: number;
   chunkMergeThreshold: number;
+  searchContextWindowSize: number;
 }
 
 export interface ContextLimitsConfig {
@@ -102,6 +103,10 @@ export class AIConfigService {
         ),
         chunkMergeThreshold: parseInt(
           process.env.AI_RETRIEVAL_CHUNK_MERGE_THRESHOLD || "15",
+          10
+        ),
+        searchContextWindowSize: parseInt(
+          process.env.AI_RETRIEVAL_SEARCH_CONTEXT_WINDOW || "15",
           10
         ),
         ...customConfig?.retrieval,

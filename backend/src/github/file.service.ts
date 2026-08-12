@@ -13,25 +13,29 @@ const IGNORE_FOLDERS = [
 ];
 
 export class FileService {
-  getDirectoryTree(dir: string): any[] {
+  getDirectoryTree(dir: string, currentRelativePath = ""): any[] {
+    if (!fs.existsSync(dir)) return [];
     const items = fs.readdirSync(dir);
 
     return items
       .filter((item) => !IGNORE_FOLDERS.includes(item))
       .map((item) => {
         const fullPath = path.join(dir, item);
+        const relPath = currentRelativePath ? `${currentRelativePath}/${item}` : item;
         const stats = fs.statSync(fullPath);
 
         if (stats.isDirectory()) {
           return {
             name: item,
+            path: relPath,
             type: "folder",
-            children: this.getDirectoryTree(fullPath),
+            children: this.getDirectoryTree(fullPath, relPath),
           };
         }
 
         return {
           name: item,
+          path: relPath,
           type: "file",
         };
       });
@@ -60,10 +64,10 @@ export class FileService {
   getAllFiles(
     dir: string,
     basePath = ""
-  ): { path: string; size: number }[] {
+  ): { path: string; size: number; mtimeMs: number }[] {
     const items = fs.readdirSync(dir);
 
-    let files: { path: string; size: number }[] = [];
+    let files: { path: string; size: number; mtimeMs: number }[] = [];
 
     for (const item of items) {
       if (IGNORE_FOLDERS.includes(item)) {
@@ -71,7 +75,7 @@ export class FileService {
       }
 
       const fullPath = path.join(dir, item);
-      const relativePath = path.join(basePath, item);
+      const relativePath = basePath ? `${basePath}/${item}` : item;
       const stats = fs.statSync(fullPath);
 
       if (stats.isDirectory()) {
@@ -80,6 +84,7 @@ export class FileService {
         files.push({
           path: relativePath,
           size: stats.size,
+          mtimeMs: stats.mtimeMs,
         });
       }
     }

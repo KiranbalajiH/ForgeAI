@@ -11,6 +11,7 @@ interface ChatMessageListProps {
   isLoading?: boolean;
   onRegenerate?: (id: string) => void;
   onSelectHint?: (hint: string) => void;
+  onSourceClick?: (path: string, lineNumber?: number) => void;
 }
 
 export default function ChatMessageList({
@@ -19,6 +20,7 @@ export default function ChatMessageList({
   isLoading = false,
   onRegenerate,
   onSelectHint,
+  onSourceClick,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +89,7 @@ export default function ChatMessageList({
               repositoryName={repositoryName}
               onRegenerate={onRegenerate}
               isLoading={isLoading}
+              onSourceClick={onSourceClick}
             />
           );
         })}

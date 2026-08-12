@@ -20,7 +20,12 @@ export interface FileSymbols {
 export class SymbolAnalyzerService {
   private fileService = new FileService();
 
-  analyze(repoName: string): FileSymbols[] {
+  analyze(
+    repoName: string,
+    changedFiles?: Set<string>,
+    deletedFiles?: Set<string>,
+    previous?: FileSymbols[]
+  ): FileSymbols[] {
     const repoPath = path.join(
       process.cwd(),
       "temp",
@@ -33,9 +38,18 @@ export class SymbolAnalyzerService {
         [".ts", ".tsx", ".js", ".jsx"].some((ext) =>
           file.path.endsWith(ext)
         )
-      );
+      )
+      .filter((file) => !changedFiles || changedFiles.has(file.path));
 
     const result: FileSymbols[] = [];
+
+    if (previous && changedFiles && deletedFiles) {
+      result.push(
+        ...previous.filter(
+          (p) => !changedFiles.has(p.file) && !deletedFiles.has(p.file)
+        )
+      );
+    }
 
     for (const file of files) {
       const content = this.fileService.readFile(

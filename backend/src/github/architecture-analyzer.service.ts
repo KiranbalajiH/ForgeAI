@@ -17,10 +17,16 @@ export class ArchitectureAnalyzerService {
     this.fileService = new FileService();
   }
 
-  analyze(repoName: string): ArchitectureAnalysis {
+  analyze(
+    repoName: string,
+    changedFiles?: Set<string>,
+    deletedFiles?: Set<string>,
+    previous?: ArchitectureAnalysis
+  ): ArchitectureAnalysis {
     const repoPath = path.join(process.cwd(), "temp", repoName);
 
-    const allFiles = this.fileService.getAllFiles(repoPath);
+    const allFiles = this.fileService.getAllFiles(repoPath)
+      .filter((file) => !changedFiles || changedFiles.has(file.path));
 
     const architecture: ArchitectureAnalysis = {
       controllers: [],
@@ -30,6 +36,15 @@ export class ArchitectureAnalyzerService {
       models: [],
       configs: [],
     };
+
+    if (previous && changedFiles && deletedFiles) {
+      architecture.controllers.push(...previous.controllers.filter(p => !changedFiles.has(p) && !deletedFiles.has(p)));
+      architecture.services.push(...previous.services.filter(p => !changedFiles.has(p) && !deletedFiles.has(p)));
+      architecture.routes.push(...previous.routes.filter(p => !changedFiles.has(p) && !deletedFiles.has(p)));
+      architecture.middleware.push(...previous.middleware.filter(p => !changedFiles.has(p) && !deletedFiles.has(p)));
+      architecture.models.push(...previous.models.filter(p => !changedFiles.has(p) && !deletedFiles.has(p)));
+      architecture.configs.push(...previous.configs.filter(p => !changedFiles.has(p) && !deletedFiles.has(p)));
+    }
 
     for (const file of allFiles) {
       const filePath = file.path.toLowerCase();

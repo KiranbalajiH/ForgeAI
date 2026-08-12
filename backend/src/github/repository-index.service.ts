@@ -1,9 +1,13 @@
 import path from "path";
+import fs from "fs";
 import {
   AnalysisPipelineService,
   RepositoryAnalysisResult,
 } from "./analysis-pipeline.service";
 import { analysisCacheService } from "../ai/analysis-cache.service";
+import { FileService } from "./file.service";
+import { SupportedFileService } from "./supported-file.service";
+import { FileFilterService } from "./file-filter.service";
 
 export type IndexChunkType =
   | "file"
@@ -15,6 +19,23 @@ export type IndexChunkType =
   | "databaseModel"
   | "relationship"
   | "summary";
+
+export type RepositoryIndexState =
+  | "NOT_INDEXED"
+  | "INDEXING"
+  | "INDEXED"
+  | "STALE"
+  | "FAILED";
+
+export interface RepositoryIndexStatusMetadata {
+  repository: string;
+  status: RepositoryIndexState;
+  lastSuccessfulIndexTime: string | null;
+  lastAttemptedIndexTime: string | null;
+  indexError: string | null;
+  totalFiles?: number;
+  totalChunks?: number;
+}
 
 export interface IndexChunk {
   /** Unique chunk ID for exact lookup, e.g. "symbol:src/auth/auth.service.ts:loginUser" */
@@ -73,34 +94,175 @@ export interface IndexedRepository {
  * Responsibility: Construct and manage a rich, provider-agnostic, in-memory index
  * from pre-computed RepositoryAnalysisResult data.
  *
- * Indexed Sections:
- *  1. Project Overview & Summary (`summary`)
- *  2. Source Files (`file`)
- *  3. Modules & Dependencies (`module`, `relationship`)
- *  4. Controllers (`controller`)
- *  5. Services (`service`)
- *  6. Exported Symbols (`symbol`)
- *  7. API Routes (`apiRoute`)
- *  8. Database Models (`databaseModel`)
- *
- * Provides O(1) dictionary lookups for instant symbol, route, and model retrieval.
+ * Provides O(1) dictionary lookups for instant symbol, route, and model retrieval,
+ * along with state management (NOT_INDEXED, INDEXING, INDEXED, STALE, FAILED).
  */
 export class RepositoryIndexService {
   private pipeline = new AnalysisPipelineService();
   private indexStore = new Map<string, IndexedRepository>();
+  private statusStore = new Map<string, RepositoryIndexStatusMetadata>();
+
+  /**
+   * Retrieves the current index status metadata for a repository.
+   */
+  getStatus(repository: string): RepositoryIndexStatusMetadata {
+    let metadata = this.statusStore.get(repository);
+
+    if (!metadata) {
+      const hasAnalysis = analysisCacheService.has(repository);
+      const hasIndex = this.indexStore.has(repository);
+
+      if (hasAnalysis || hasIndex) {
+        const cachedAnalysis = analysisCacheService.get(repository);
+        const cachedIndex = this.indexStore.get(repository);
+        metadata = {
+          repository,
+          status: "INDEXED",
+          lastSuccessfulIndexTime: new Date().toISOString(),
+          lastAttemptedIndexTime: new Date().toISOString(),
+          indexError: null,
+          totalFiles: cachedAnalysis?.totalFiles,
+          totalChunks: cachedIndex?.totalChunks,
+        };
+      } else {
+        metadata = {
+          repository,
+          status: "NOT_INDEXED",
+          lastSuccessfulIndexTime: null,
+          lastAttemptedIndexTime: null,
+          indexError: null,
+        };
+      }
+      this.statusStore.set(repository, metadata);
+    }
+
+    // Perform stale check if currently marked INDEXED
+    if (metadata.status === "INDEXED" && this.checkIsStale(repository)) {
+      metadata.status = "STALE";
+      this.statusStore.set(repository, metadata);
+    }
+
+    return metadata;
+  }
+
+  /**
+   * Updates index status metadata for a repository.
+   */
+  setStatus(
+    repository: string,
+    updates: Partial<RepositoryIndexStatusMetadata>
+  ): RepositoryIndexStatusMetadata {
+    const existing = this.statusStore.get(repository) || {
+      repository,
+      status: "NOT_INDEXED",
+      lastSuccessfulIndexTime: null,
+      lastAttemptedIndexTime: null,
+      indexError: null,
+    };
+
+    const updated: RepositoryIndexStatusMetadata = {
+      ...existing,
+      ...updates,
+      repository,
+    };
+
+    this.statusStore.set(repository, updated);
+    return updated;
+  }
+
+  /**
+   * Marks a repository as FAILED, updating indexError while preserving the last valid index.
+   */
+  setFailed(
+    repository: string,
+    errorMsg: string,
+    attemptedTime?: string
+  ): RepositoryIndexStatusMetadata {
+    const existing = this.statusStore.get(repository) || {
+      repository,
+      status: "NOT_INDEXED",
+      lastSuccessfulIndexTime: null,
+      lastAttemptedIndexTime: null,
+      indexError: null,
+    };
+
+    const updated: RepositoryIndexStatusMetadata = {
+      ...existing,
+      status: "FAILED",
+      indexError: errorMsg,
+      lastAttemptedIndexTime: attemptedTime ?? new Date().toISOString(),
+    };
+
+    this.statusStore.set(repository, updated);
+    return updated;
+  }
+
+  /**
+   * Checks whether repository source files on disk have changed since last analysis.
+   */
+  checkIsStale(repository: string): boolean {
+    try {
+      const repoPath = path.join(process.cwd(), "temp", repository);
+      if (!fs.existsSync(repoPath)) return false;
+
+      const previous = analysisCacheService.get(repository);
+      if (!previous || !previous.files) return false;
+
+      const fileService = new FileService();
+      const supportedFileService = new SupportedFileService();
+      const fileFilterService = new FileFilterService();
+
+      const allFiles = fileService
+        .getAllFiles(repoPath)
+        .filter((f) => supportedFileService.isSupported(f.path))
+        .filter((f) => !fileFilterService.shouldSkip(f.path, f.size));
+
+      if (allFiles.length !== previous.files.length) {
+        return true;
+      }
+
+      const prevMap = new Map(previous.files.map((f: any) => [f.path, f]));
+      for (const file of allFiles) {
+        const prev = prevMap.get(file.path);
+        if (
+          !prev ||
+          prev.size !== file.size ||
+          (prev.mtimeMs && prev.mtimeMs !== file.mtimeMs)
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
 
   /**
    * Builds a rich in-memory searchable index from a repository's analysis result.
    * Reuses existing AnalysisPipelineService output (cache-first).
+   * Updates status to INDEXING -> INDEXED (or FAILED on error).
    *
    * @param repository - Repository slug/name
    */
   buildIndex(repository: string): IndexedRepository {
-    // 1. Fetch analysis from cache or run pipeline
-    let analysis = analysisCacheService.get(repository);
-    if (!analysis) {
-      analysis = this.pipeline.analyze(repository);
+    const attemptedTime = new Date().toISOString();
+    const currentMetadata = this.statusStore.get(repository);
+    if (!currentMetadata || currentMetadata.status !== "INDEXING") {
+      this.setStatus(repository, {
+        status: "INDEXING",
+        lastAttemptedIndexTime: attemptedTime,
+        indexError: null,
+      });
     }
+
+    try {
+      // 1. Fetch analysis from cache or run pipeline
+      let analysis = analysisCacheService.get(repository);
+      if (!analysis) {
+        analysis = this.pipeline.analyze(repository);
+      }
 
     const chunks: IndexChunk[] = [];
     const chunkMap = new Map<string, IndexChunk>();
@@ -159,15 +321,21 @@ export class RepositoryIndexService {
       });
     }
 
-    // 3. Index Source Files & Code Modules
+    // 3. Index Source Files (no separate module chunks — file chunks carry actual content)
+    const fileContentMap = new Map<string, string>();
     if (analysis.files?.length) {
       for (const file of analysis.files) {
+        const fileContent = file.content ?? "";
+        fileContentMap.set(file.path, fileContent);
+        // Also map by basename for architecture cross-referencing
+        fileContentMap.set(path.basename(file.path), fileContent);
+
         const fileChunk: IndexChunk = {
           id: `file:${file.path}`,
           type: "file",
           filePath: file.path,
           name: path.basename(file.path),
-          content: file.content ?? "",
+          content: fileContent,
           metadata: {
             size: file.size,
             ext: path.extname(file.path),
@@ -176,33 +344,23 @@ export class RepositoryIndexService {
         addChunk(fileChunk);
         modulesMap.set(file.path, fileChunk);
         modulesMap.set(fileChunk.name, fileChunk);
-
-        // Also register as code module
-        const moduleChunk: IndexChunk = {
-          id: `module:${file.path}`,
-          type: "module",
-          filePath: file.path,
-          name: path.basename(file.path),
-          content: `Code module at ${file.path}`,
-          metadata: {
-            path: file.path,
-            size: file.size,
-          },
-        };
-        addChunk(moduleChunk);
       }
     }
 
-    // 4. Index Controllers (Architecture)
+    // 4. Index Controllers (Architecture) — with actual source code from file content
     if (analysis.architecture?.controllers?.length) {
       for (const controllerPath of analysis.architecture.controllers as string[]) {
         const name = path.basename(controllerPath);
+        const sourceContent = fileContentMap.get(controllerPath) || fileContentMap.get(name) || "";
+        const truncatedContent = sourceContent.length > 4000
+          ? sourceContent.slice(0, 4000) + "\n... [truncated]"
+          : sourceContent;
         const chunk: IndexChunk = {
           id: `controller:${controllerPath}`,
           type: "controller",
           filePath: controllerPath,
           name,
-          content: `Controller component handling endpoint routing and HTTP requests at ${controllerPath}`,
+          content: truncatedContent || `Controller at ${controllerPath}`,
           metadata: { path: controllerPath },
         };
         addChunk(chunk);
@@ -211,16 +369,20 @@ export class RepositoryIndexService {
       }
     }
 
-    // 5. Index Services (Architecture)
+    // 5. Index Services (Architecture) — with actual source code from file content
     if (analysis.architecture?.services?.length) {
       for (const servicePath of analysis.architecture.services as string[]) {
         const name = path.basename(servicePath);
+        const sourceContent = fileContentMap.get(servicePath) || fileContentMap.get(name) || "";
+        const truncatedContent = sourceContent.length > 4000
+          ? sourceContent.slice(0, 4000) + "\n... [truncated]"
+          : sourceContent;
         const chunk: IndexChunk = {
           id: `service:${servicePath}`,
           type: "service",
           filePath: servicePath,
           name,
-          content: `Service component encapsulating business logic and data operations at ${servicePath}`,
+          content: truncatedContent || `Service at ${servicePath}`,
           metadata: { path: servicePath },
         };
         addChunk(chunk);
@@ -248,17 +410,41 @@ export class RepositoryIndexService {
       }
     }
 
-    // 7. Index Exported Symbols
+    // 7. Index Exported Symbols — with code excerpt from source file
     if (analysis.symbols?.length) {
       for (const fileSymbols of analysis.symbols) {
         if (!fileSymbols.symbols?.length) continue;
+        const fileContent = fileContentMap.get(fileSymbols.file) || fileContentMap.get(path.basename(fileSymbols.file)) || "";
+        const fileLines = fileContent ? fileContent.split("\n") : [];
+
         for (const sym of fileSymbols.symbols) {
+          // Extract a code excerpt around the symbol declaration
+          let symbolContent = `${sym.type} ${sym.name} exported in ${fileSymbols.file}`;
+          if (fileLines.length > 0) {
+            const symbolNameLower = sym.name.toLowerCase();
+            let declLineIdx = fileLines.findIndex((line) =>
+              line.toLowerCase().includes(symbolNameLower) &&
+              /\b(export|class|function|interface|type|const|enum|abstract)\b/i.test(line)
+            );
+            if (declLineIdx === -1) {
+              declLineIdx = fileLines.findIndex((line) => line.toLowerCase().includes(symbolNameLower));
+            }
+            if (declLineIdx !== -1) {
+              const excerptStart = Math.max(0, declLineIdx - 2);
+              const excerptEnd = Math.min(fileLines.length, declLineIdx + 30);
+              const excerpt = fileLines.slice(excerptStart, excerptEnd).join("\n");
+              symbolContent = excerpt.length > 2000
+                ? excerpt.slice(0, 2000) + "\n... [truncated]"
+                : excerpt;
+            }
+          }
+
           const chunk: IndexChunk = {
             id: `symbol:${fileSymbols.file}:${sym.name}`,
             type: "symbol",
             filePath: fileSymbols.file,
             name: sym.name,
-            content: `${sym.type} ${sym.name} exported in ${fileSymbols.file}`,
+            content: symbolContent,
             metadata: {
               symbolType: sym.type,
               file: fileSymbols.file,
@@ -327,7 +513,20 @@ export class RepositoryIndexService {
     // Store in-memory
     this.indexStore.set(repository, indexedRepo);
 
+    this.setStatus(repository, {
+      status: "INDEXED",
+      lastSuccessfulIndexTime: new Date().toISOString(),
+      lastAttemptedIndexTime: attemptedTime,
+      indexError: null,
+      totalFiles: analysis.totalFiles,
+      totalChunks: chunks.length,
+    });
+
     return indexedRepo;
+    } catch (error: any) {
+      this.setFailed(repository, error.message || "Failed to build index", attemptedTime);
+      throw error;
+    }
   }
 
   /**
@@ -381,3 +580,5 @@ export class RepositoryIndexService {
     return index?.dbModelsMap.get(modelName) ?? null;
   }
 }
+
+export const repositoryIndexService = new RepositoryIndexService();

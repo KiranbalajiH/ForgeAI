@@ -1,7 +1,8 @@
 import { analysisCacheService } from "./analysis-cache.service";
 import {
-  ChatSessionService,
+  chatSessionService,
   ChatMessage,
+  ChatSessionService,
 } from "./chat-session.service";
 import { RepoChatContextBuilderService } from "./repo-chat-context-builder.service";
 import { Response } from "express";
@@ -27,7 +28,7 @@ export class RepoChatService {
   private llmService: LLMService;
   private sessionService: ChatSessionService;
 
-  constructor(sessionService: ChatSessionService) {
+  constructor(sessionService: ChatSessionService = chatSessionService) {
     this.llmService = new LLMService();
     this.sessionService = sessionService;
   }
@@ -47,7 +48,7 @@ export class RepoChatService {
     }
 
     // 2. Resolve or create session
-    const session = this.sessionService.getOrCreate(sessionId, repoName);
+    const session = this.sessionService.getOrCreate(sessionId, repoName, "system");
 
     // 3. Get or build the static system prompt (cached per repo)
     let systemPrompt = systemPromptCache.get(repoName);
@@ -67,7 +68,7 @@ export class RepoChatService {
     // 5. Assemble LLM messages
     const recentHistory = session.messages
       .slice(-MAX_HISTORY_MESSAGES)
-      .map((m) => ({
+      .map((m: ChatMessage) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       }));

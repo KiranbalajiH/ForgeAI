@@ -20,7 +20,11 @@ import {
   MessageSquare,
   Activity,
   Code,
+  Clock,
+  Play,
+  RefreshCw,
 } from "lucide-react";
+import { repositoryService, RepositoryIndexStatus } from "@/services/repository-service";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +44,8 @@ import {
 } from "@/services/repository-search-service";
 import MarkdownRenderer from "@/features/repository-chat/components/markdown-renderer";
 import { repositories as mockRepositories } from "@/features/repositories/mock-data";
+import FileViewerDialog from "./file-viewer-dialog";
+import RepositoryStatusBadge from "./repository-status-badge";
 
 interface RepositoryCodeSearchProps {
   initialRepoName?: string;
@@ -54,6 +60,7 @@ export default function RepositoryCodeSearch({
 }: RepositoryCodeSearchProps) {
   const router = useRouter();
   const [selectedRepo, setSelectedRepo] = useState<string>(initialRepoName);
+  const [repoIndexStatus, setRepoIndexStatus] = useState<RepositoryIndexStatus | null>(null);
   const [query, setQuery] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +70,12 @@ export default function RepositoryCodeSearch({
 
   // Context viewer modal state
   const [selectedMatch, setSelectedMatch] = useState<SearchMatch | null>(null);
-  const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  
+  // File viewer modal state
+  const [viewedFilePath, setViewedFilePath] = useState<string | null>(null);
+  const [viewedLineNumber, setViewedLineNumber] = useState<number | null>(null);
+  const [isFileViewerOpen, setIsFileViewerOpen] = useState<boolean>(false);
 
   // Selected repository details
   const activeRepoDetail = useMemo(() => {
@@ -151,7 +162,9 @@ export default function RepositoryCodeSearch({
 
   const openContextViewer = (match: SearchMatch) => {
     setSelectedMatch(match);
-    setIsViewerOpen(true);
+    setViewedFilePath(match.filePath || match.name);
+    setViewedLineNumber(match.lineNumber || null);
+    setIsFileViewerOpen(true);
   };
 
   const handleAskInChat = (match: SearchMatch) => {
@@ -197,18 +210,19 @@ export default function RepositoryCodeSearch({
         <CardContent className="p-4 md:p-6 space-y-4">
           {/* Top Repository Summary Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 text-xs">
-            <div className="flex items-center gap-2">
-              <FolderGit2 className="h-4 w-4 text-primary" />
-              <span className="font-semibold text-sm text-foreground">{activeRepoDetail.name}</span>
-              <Badge variant="outline" className="font-mono text-[11px]">
-                {activeRepoDetail.language}
-              </Badge>
-              <Badge
-                variant={activeRepoDetail.status === "Active" ? "default" : "secondary"}
-                className="text-[10px]"
-              >
-                {activeRepoDetail.status}
-              </Badge>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <FolderGit2 className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm text-foreground">{activeRepoDetail.name}</span>
+                <Badge variant="outline" className="font-mono text-[11px]">
+                  {activeRepoDetail.language}
+                </Badge>
+              </div>
+
+              <RepositoryStatusBadge
+                repoName={selectedRepo}
+                onStatusChange={(status) => setRepoIndexStatus(status)}
+              />
             </div>
 
             <div className="flex items-center gap-3 text-muted-foreground">
@@ -220,7 +234,7 @@ export default function RepositoryCodeSearch({
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push(`/repositories/${encodeURIComponent(selectedRepo)}/chat`)}
-                className="h-7 gap-1.5 text-xs text-primary hover:text-primary"
+                className="h-7 gap-1.5 text-xs text-primary hover:text-primary cursor-pointer"
               >
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span>Open Repository Chat</span>
@@ -305,13 +319,90 @@ export default function RepositoryCodeSearch({
 
       {/* API Error State */}
       {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <div className="flex-1 text-sm font-medium">{error}</div>
-          <Button variant="outline" size="sm" onClick={() => handleSearch()}>
+        <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive text-xs">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <div className="flex-1 font-medium">{error}</div>
+          <Button variant="outline" size="sm" onClick={() => handleSearch()} className="h-7 text-xs">
             Retry
           </Button>
         </div>
+      )}
+
+      {/* STALE Warning Banner */}
+      {!isLoading && repoIndexStatus?.status === "STALE" && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-400">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 shrink-0 text-amber-500" />
+            <span>Source files have changed since the last index. Results may be outdated until synchronized.</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => repositoryService.triggerIndex(selectedRepo)}
+            className="h-7 px-3 text-xs border-amber-500/30 hover:bg-amber-500/20 cursor-pointer"
+          >
+            Sync Index
+          </Button>
+        </div>
+      )}
+
+      {/* NOT_INDEXED Readiness Card */}
+      {!isLoading && !searchResult && repoIndexStatus?.status === "NOT_INDEXED" && (
+        <Card className="border-border shadow-xs">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <Clock className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold">Repository Not Indexed</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Code search requires <strong>{selectedRepo}</strong> to be indexed before code can be searched.
+              </p>
+            </div>
+            <Button onClick={() => repositoryService.triggerIndex(selectedRepo)} className="gap-2 cursor-pointer">
+              <Play className="h-4 w-4" />
+              <span>Index Repository Now</span>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* INDEXING Progress Readiness Card */}
+      {!isLoading && repoIndexStatus?.status === "INDEXING" && !searchResult && (
+        <Card className="border-border shadow-xs">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold">Indexing Repository in Progress...</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Analyzing and indexing <strong>{selectedRepo}</strong> code structure. Search will update automatically once completed.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* FAILED Readiness Card */}
+      {!isLoading && !searchResult && repoIndexStatus?.status === "FAILED" && (
+        <Card className="border-destructive/30 bg-destructive/5 shadow-xs">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertCircle className="h-6 w-6 text-destructive" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold text-destructive">Indexing Attempt Failed</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                {repoIndexStatus.indexError || `An error occurred while attempting to index ${selectedRepo}.`}
+              </p>
+            </div>
+            <Button variant="destructive" onClick={() => repositoryService.triggerIndex(selectedRepo)} className="gap-2 cursor-pointer">
+              <RefreshCw className="h-4 w-4" />
+              <span>Retry Indexing</span>
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {/* Loading Skeleton State */}
@@ -528,52 +619,17 @@ export default function RepositoryCodeSearch({
         </Card>
       )}
 
-      {/* Source Context Viewer Modal (Dialog) */}
-      <Dialog open={isViewerOpen} onOpenChange={setIsViewerOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-6">
-          <DialogHeader className="border-b pb-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                {selectedMatch && getCategoryIcon(selectedMatch.type)}
-                <DialogTitle className="text-base font-mono truncate">
-                  {selectedMatch?.name}
-                </DialogTitle>
-                {selectedMatch && (
-                  <Badge variant="outline" className="text-xs uppercase font-mono shrink-0">
-                    {selectedMatch.type}
-                  </Badge>
-                )}
-              </div>
-
-              {selectedMatch && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setIsViewerOpen(false);
-                    handleAskInChat(selectedMatch);
-                  }}
-                  className="gap-1.5 text-xs shrink-0"
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  <span>Ask AI in Chat</span>
-                </Button>
-              )}
-            </div>
-            <DialogDescription className="text-xs font-mono text-muted-foreground">
-              {selectedMatch?.filePath || selectedMatch?.name} &bull; Score: {selectedMatch ? Math.round(selectedMatch.score * 100) : 0}%
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Dialog Body with Code Syntax Highlighting */}
-          <div className="flex-1 overflow-auto py-4">
-            {selectedMatch ? (
-              <MarkdownRenderer
-                content={`\`\`\`typescript\n${selectedMatch.content}\n\`\`\``}
-              />
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Full Source File Viewer Modal */}
+      <FileViewerDialog
+        repoName={selectedRepo}
+        filePath={viewedFilePath}
+        lineNumber={viewedLineNumber}
+        isOpen={isFileViewerOpen}
+        onOpenChange={setIsFileViewerOpen}
+        onAskInChat={onAskInChat || ((repoName, queryText) => {
+          router.push(`/repositories/${encodeURIComponent(repoName)}/chat?ask=${encodeURIComponent(queryText)}`);
+        })}
+      />
     </div>
   );
 }

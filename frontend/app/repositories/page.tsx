@@ -4,11 +4,12 @@ import { useMemo, useState } from "react";
 import PageTemplate from "@/components/common/page-template";
 import RepositorySearch, { RepositoryCodeSearch } from "@/features/repositories/components/repository-search";
 import RepositoryTable from "@/features/repositories/components/repository-table";
+import RepositoryFileTree from "@/features/repositories/components/repository-file-tree";
 import { repositories } from "@/features/repositories/mock-data";
-import { Search, FolderGit2 } from "lucide-react";
+import { Search, FolderGit2, FolderTree } from "lucide-react";
 
 export default function RepositoriesPage() {
-  const [activeTab, setActiveTab] = useState<"code" | "repositories">("code");
+  const [activeTab, setActiveTab] = useState<"code" | "tree" | "repositories">("code");
   const [selectedSearchRepo, setSelectedSearchRepo] = useState<string>("ForgeAI");
   const [search, setSearch] = useState("");
 
@@ -26,11 +27,11 @@ export default function RepositoriesPage() {
   return (
     <PageTemplate
       title="Repositories"
-      description="Search indexed repository code, manage repositories, and analyze codebase structure."
+      description="Search indexed repository code, manage repositories, explore file structures, and analyze codebases."
     >
       <div className="space-y-6">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b pb-2">
+        <div className="flex items-center gap-2 border-b pb-2 flex-wrap">
           <button
             onClick={() => setActiveTab("code")}
             className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors cursor-pointer ${
@@ -41,6 +42,18 @@ export default function RepositoriesPage() {
           >
             <Search className="h-4 w-4" />
             <span>Code Search</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("tree")}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === "tree"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
+          >
+            <FolderTree className="h-4 w-4" />
+            <span>File Browser</span>
           </button>
 
           <button
@@ -59,6 +72,8 @@ export default function RepositoriesPage() {
         {/* Tab Content */}
         {activeTab === "code" ? (
           <RepositoryCodeSearch initialRepoName={selectedSearchRepo} />
+        ) : activeTab === "tree" ? (
+          <RepositoryFileTree initialRepoName={selectedSearchRepo} />
         ) : (
           <div className="space-y-6">
             <RepositorySearch

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { RepoChatService } from "../ai/repo-chat.service";
 import { ChatSessionService } from "../ai/chat-session.service";
 import { analysisCacheService } from "../ai/analysis-cache.service";
+import { repositoryIndexService } from "./repository-index.service";
 
 const sessionService = new ChatSessionService();
 const chatService = new RepoChatService(sessionService);
@@ -36,11 +37,35 @@ export class RepoChatController {
       });
     }
 
-    if (!analysisCacheService.has(repoName)) {
-      return res.status(404).json({
-        success: false,
-        message: `Repository "${repoName}" has not been analyzed yet. Please run POST /repo/analyze first.`,
-      });
+    const statusInfo = repositoryIndexService.getStatus(repoName);
+    const hasValidIndex = Boolean(
+      repositoryIndexService.getIndex(repoName) || analysisCacheService.get(repoName)
+    );
+
+    if (!hasValidIndex) {
+      if (statusInfo.status === "NOT_INDEXED") {
+        return res.status(400).json({
+          success: false,
+          message: `Repository "${repoName}" has not been indexed yet. Please index the repository to chat.`,
+          status: statusInfo,
+        });
+      }
+
+      if (statusInfo.status === "INDEXING") {
+        return res.status(400).json({
+          success: false,
+          message: `Repository "${repoName}" is currently being indexed. Please wait for indexing to complete.`,
+          status: statusInfo,
+        });
+      }
+
+      if (statusInfo.status === "FAILED") {
+        return res.status(400).json({
+          success: false,
+          message: `Indexing failed for repository "${repoName}". ${statusInfo.indexError || ""}`,
+          status: statusInfo,
+        });
+      }
     }
 
     try {

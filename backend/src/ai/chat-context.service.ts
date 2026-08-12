@@ -14,6 +14,7 @@ export type ContextDomain =
 export interface SourceReference {
   name: string;
   path: string;
+  lineNumber?: number;
 }
 
 export interface BuiltContext {
@@ -47,10 +48,15 @@ export class ChatContextService {
     const contextUsed: ContextDomain[] = [];
     const sourcesMap = new Map<string, SourceReference>();
 
-    const addSource = (filePath: string) => {
-      if (!filePath || sourcesMap.has(filePath)) return;
+    const addSource = (filePath: string, lineNum?: number) => {
+      if (!filePath) return;
       const fileName = filePath.split("/").pop() ?? filePath;
-      sourcesMap.set(filePath, { name: fileName, path: filePath });
+      const existing = sourcesMap.get(filePath);
+      if (!existing) {
+        sourcesMap.set(filePath, { name: fileName, path: filePath, lineNumber: lineNum });
+      } else if (!existing.lineNumber && lineNum) {
+        existing.lineNumber = lineNum;
+      }
     };
 
     // ── Persona ─────────────────────────────────────────────────────────────
@@ -156,11 +162,30 @@ export class ChatContextService {
       const topFiles = fileRelevanceService.rank(analysis.files, question, 5);
       if (topFiles.length > 0) {
         const fileSnippets = topFiles.map((file) => {
-          addSource(file.path);
-          const snippet =
-            file.content.length > 3000
-              ? file.content.slice(0, 3000) + "\n... (truncated)"
-              : file.content;
+          const lines = file.content.split("\n");
+          const keywords = question.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+          let matchLine: number | undefined;
+          for (let i = 0; i < lines.length; i++) {
+            const lowerLine = lines[i].toLowerCase();
+            if (keywords.some((kw) => lowerLine.includes(kw))) {
+              matchLine = i + 1;
+              break;
+            }
+          }
+          addSource(file.path, matchLine);
+          let snippet = file.content;
+          if (snippet.length > 3000) {
+            if (matchLine) {
+              const fileLines = snippet.split("\n");
+              const startIdx = Math.max(0, matchLine - 1 - 50);
+              const endIdx = Math.min(fileLines.length, matchLine + 50);
+              snippet = (startIdx > 0 ? "...\n" : "") + 
+                        fileLines.slice(startIdx, endIdx).join("\n") + 
+                        (endIdx < fileLines.length ? "\n..." : "");
+            } else {
+              snippet = snippet.slice(0, 3000) + "\n... (truncated)";
+            }
+          }
           const ext = file.path.split(".").pop() ?? "";
           return `### ${file.path}\n\`\`\`${ext}\n${snippet}\n\`\`\``;
         });

@@ -10,6 +10,7 @@ const chatController = new RepoChatController();
 router.post("/clone", controller.clone.bind(controller));
 router.post("/analyze", controller.analyze.bind(controller));
 
+router.get("/:repoName/status", controller.getStatus.bind(controller));
 router.get("/:repoName/files", controller.read.bind(controller));
 router.get("/:repoName/file", controller.readFile.bind(controller));
 

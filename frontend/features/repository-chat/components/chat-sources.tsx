@@ -7,11 +7,13 @@ import { SourceReference } from "@/services/repository-chat-service";
 interface ChatSourcesProps {
   sources: SourceReference[];
   repositoryName?: string;
+  onSourceClick?: (path: string, lineNumber?: number) => void;
 }
 
 export default function ChatSources({
   sources,
   repositoryName = "",
+  onSourceClick,
 }: ChatSourcesProps) {
   if (!sources || sources.length === 0) return null;
 
@@ -27,6 +29,26 @@ export default function ChatSources({
           const targetUrl = repositoryName
             ? `/repositories/${encodeURIComponent(repositoryName)}?file=${encodeURIComponent(source.path)}`
             : `/repositories?file=${encodeURIComponent(source.path)}`;
+
+          if (onSourceClick) {
+            return (
+              <button
+                key={source.path}
+                type="button"
+                onClick={() => onSourceClick(source.path, source.lineNumber)}
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background/80 px-2 py-1 font-mono text-[11px] font-normal transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer text-left"
+                title={source.path}
+              >
+                <span className="font-semibold text-foreground">
+                  {source.name}
+                  {source.lineNumber ? `:${source.lineNumber}` : ""}
+                </span>
+                <span className="max-w-[180px] truncate text-[10px] text-muted-foreground">
+                  ({source.path}{source.lineNumber ? `:L${source.lineNumber}` : ""})
+                </span>
+              </button>
+            );
+          }
 
           return (
             <Link

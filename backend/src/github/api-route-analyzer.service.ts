@@ -12,14 +12,28 @@ export interface ApiRoute {
 export class ApiRouteAnalyzerService {
   private fileService = new FileService();
 
-  analyze(repoName: string): ApiRoute[] {
+  analyze(
+    repoName: string,
+    changedFiles?: Set<string>,
+    deletedFiles?: Set<string>,
+    previous?: ApiRoute[]
+  ): ApiRoute[] {
     const repoPath = path.join(process.cwd(), "temp", repoName);
 
     const files = this.fileService
       .getAllFiles(repoPath)
-      .filter((file) => file.path.endsWith(".routes.ts"));
+      .filter((file) => file.path.endsWith(".routes.ts"))
+      .filter((file) => !changedFiles || changedFiles.has(file.path));
 
     const routes: ApiRoute[] = [];
+
+    if (previous && changedFiles && deletedFiles) {
+      routes.push(
+        ...previous.filter(
+          (p) => !changedFiles.has(p.file) && !deletedFiles.has(p.file)
+        )
+      );
+    }
 
     const routeRegex =
       /router\.(get|post|put|delete|patch)\(\s*["`](.*?)["`]\s*,\s*(.*?)\);?/g;

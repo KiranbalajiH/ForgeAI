@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { RepoService } from "./repo.service";
 import { FileService } from "./file.service";
 import { RepositoryAnalyzerService } from "./repository-analyzer.service";
+import { repositoryIndexService } from "./repository-index.service";
 
 const repoService = new RepoService();
 const fileService = new FileService();
@@ -96,8 +97,40 @@ export class RepoController {
   }
 
   async analyze(req: Request, res: Response) {
+    const { repoName, simulateFailure } = req.body || {};
+
     try {
-      const { repoName } = req.body;
+      if (!repoName) {
+        return res.status(400).json({
+          success: false,
+          message: "repoName is required",
+        });
+      }
+
+      const result = repositoryAnalyzerService.analyzeRepository(
+        repoName,
+        Boolean(simulateFailure)
+      );
+
+      return res.json({
+        success: true,
+        data: result,
+        status: repositoryIndexService.getStatus(repoName),
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to analyze repository",
+        status: repoName ? repositoryIndexService.getStatus(repoName) : undefined,
+      });
+    }
+  }
+
+  async getStatus(req: Request, res: Response) {
+    try {
+      const repoName = Array.isArray(req.params.repoName)
+        ? req.params.repoName[0]
+        : req.params.repoName;
 
       if (!repoName) {
         return res.status(400).json({
@@ -106,16 +139,16 @@ export class RepoController {
         });
       }
 
-      const result = repositoryAnalyzerService.analyzeRepository(repoName);
+      const status = repositoryIndexService.getStatus(repoName);
 
       return res.json({
         success: true,
-        data: result,
+        data: status,
       });
     } catch (error: any) {
       return res.status(500).json({
         success: false,
-        message: error.message,
+        message: error.message || "Failed to fetch index status",
       });
     }
   }

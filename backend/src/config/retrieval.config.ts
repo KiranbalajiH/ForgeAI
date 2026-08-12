@@ -16,6 +16,8 @@ export interface RetrievalConfig {
   minRelevanceScore: number;
   /** Minimum character length threshold to merge or retain a code snippet */
   chunkMergeThreshold: number;
+  /** Number of lines of context to include around a search match */
+  searchContextWindowSize: number;
 }
 
 export const RETRIEVAL_CONFIG: RetrievalConfig = defaultAIConfigService.get("retrieval");

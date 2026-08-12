@@ -192,10 +192,92 @@ ${content}
     query: string,
     retrieved: any
   ): { prompt: string; contextUsed: any[]; sources: any[] } {
+    const sections: string[] = [];
+    const contextUsed = new Set<string>();
+    const sourcesMap = new Map<string, any>();
+
+    const addSource = (item: any) => {
+      if (!item.filePath && !item.name) return;
+      const path = item.filePath || item.name;
+      const fileName = path.split("/").pop();
+      const existing = sourcesMap.get(path);
+      const lineNum = item.metadata?.lineNumber || item.metadata?.startLine;
+      
+      if (!existing) {
+        sourcesMap.set(path, { name: fileName, path: path, lineNumber: lineNum });
+      } else if (!existing.lineNumber && lineNum) {
+        existing.lineNumber = lineNum;
+      }
+    };
+
+    // 1. System Persona & Strict Instructions
+    sections.push(
+      `You are an expert software engineer assistant helping a developer understand the "${repository}" codebase.\n` +
+      `Your primary task is to answer the user's question accurately using ONLY the retrieved repository context provided below.\n\n` +
+      `CRITICAL INSTRUCTIONS:\n` +
+      `- Ground your claims strictly in the retrieved context.\n` +
+      `- Do not invent, hallucinate, or guess code, functions, or file paths that are not present in the context.\n` +
+      `- Clearly state when the retrieved context is insufficient to fully answer the question.\n` +
+      `- Distinguish repository facts from general programming knowledge.\n` +
+      `- Reference relevant source file paths and function names in your answer to help the user navigate.\n` +
+      `- Keep your response clear, concise, and professional.`
+    );
+
+    // 2. Project Summary
+    if (retrieved.summary) {
+      sections.push(`## Repository Overview\n${retrieved.summary}`);
+      contextUsed.add("summary");
+    }
+
+    // 3. Retrieved Files / Code Context
+    if (retrieved.files?.length) {
+      const fileContext = retrieved.files.map((f: any) => {
+        addSource(f);
+        const ext = (f.filePath || f.name || "").split(".").pop() ?? "";
+        return `### File: ${f.filePath || f.name}\n\`\`\`${ext}\n${f.content}\n\`\`\``;
+      }).join("\n\n");
+      
+      sections.push(`## Retrieved Code Context\n${fileContext}`);
+      contextUsed.add("symbols");
+    }
+    
+    // 4. API Routes
+    if (retrieved.routes?.length) {
+      const routeContext = retrieved.routes.map((r: any) => {
+        addSource(r);
+        return `- Route: ${r.name}\n  File: ${r.filePath}\n  Details: ${r.content}`;
+      }).join("\n");
+      sections.push(`## Retrieved API Routes\n${routeContext}`);
+      contextUsed.add("apiRoutes");
+    }
+
+    // 5. Database Models
+    if (retrieved.models?.length) {
+      const modelContext = retrieved.models.map((m: any) => {
+        addSource(m);
+        return `- Model: ${m.name}\n  File: ${m.filePath}\n  Details: ${m.content}`;
+      }).join("\n");
+      sections.push(`## Retrieved Database Models\n${modelContext}`);
+      contextUsed.add("database");
+    }
+    
+    // 6. Symbols
+    if (retrieved.symbols?.length) {
+      const symbolContext = retrieved.symbols.map((s: any) => {
+        addSource(s);
+        return `- Symbol: ${s.name}\n  File: ${s.filePath}\n  Details: ${s.content}`;
+      }).join("\n");
+      sections.push(`## Retrieved Symbols\n${symbolContext}`);
+      contextUsed.add("symbols");
+    }
+
+    // 7. User Question
+    sections.push(`## User Question\n${query}`);
+
     return {
-      prompt: `Context for ${repository}:\n\nQuery: ${query}`,
-      contextUsed: [],
-      sources: []
+      prompt: sections.join("\n\n---\n\n"),
+      contextUsed: Array.from(contextUsed),
+      sources: Array.from(sourcesMap.values())
     };
   }
 }

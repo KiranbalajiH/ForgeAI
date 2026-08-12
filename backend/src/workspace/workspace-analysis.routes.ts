@@ -6,21 +6,29 @@ const router = Router();
 const workspaceController = new WorkspaceAnalysisController();
 
 /**
+ * GET /api/workspace/overview/:repoName
+ * POST /api/workspace/overview
+ *
+ * Repository Overview endpoint grounded in repository evidence.
+ * Protected by JWT (Authorization: Bearer <token>).
+ */
+router.get(
+  "/overview/:repoName",
+  authenticateToken,
+  workspaceController.getOverview.bind(workspaceController)
+);
+
+router.post(
+  "/overview",
+  authenticateToken,
+  workspaceController.getOverview.bind(workspaceController)
+);
+
+/**
  * POST /api/workspace/analyze
  *
  * Unified repository health and workspace analysis endpoint.
  * Protected by JWT (Authorization: Bearer <token>).
- *
- * Body:    { repository: string }
- * Returns: {
- *   success: true,
- *   analysis: {
- *     repository, overview, technologies, architecture, majorModules,
- *     entryPoints, buildSystem, configFiles, totalFiles,
- *     estimatedComplexity, aiRecommendations, sources,
- *     contextDomainsUsed, stats, analyzedAt
- *   }
- * }
  */
 router.post(
   "/analyze",

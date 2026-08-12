@@ -19,6 +19,7 @@ interface ChatMessageProps {
   repositoryName?: string;
   onRegenerate?: (id: string) => void;
   isLoading?: boolean;
+  onSourceClick?: (path: string, lineNumber?: number) => void;
 }
 
 export default function ChatMessage({
@@ -26,6 +27,7 @@ export default function ChatMessage({
   repositoryName,
   onRegenerate,
   isLoading = false,
+  onSourceClick,
 }: ChatMessageProps) {
   const isUser = message.role === "user";
 
@@ -76,6 +78,7 @@ export default function ChatMessage({
                 <ChatSources
                   sources={message.sources}
                   repositoryName={repositoryName}
+                  onSourceClick={onSourceClick}
                 />
               )}
             </>

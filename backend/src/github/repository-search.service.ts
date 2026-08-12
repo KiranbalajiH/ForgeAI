@@ -2,6 +2,7 @@ import {
   RepositoryIndexService,
   IndexedRepository,
   IndexChunk,
+  repositoryIndexService
 } from "./repository-index.service";
 import {
   RelevanceScoringService,
@@ -18,6 +19,7 @@ export interface SearchMatch extends SearchCandidate {
   content: string;
   score: number;
   metadata: Record<string, any>;
+  lineNumber?: number;
 }
 
 export interface SearchResult {
@@ -48,7 +50,7 @@ export class RepositorySearchService {
     indexService?: RepositoryIndexService,
     scoringService?: RelevanceScoringService
   ) {
-    this.indexService = indexService ?? new RepositoryIndexService();
+    this.indexService = indexService ?? repositoryIndexService;
     this.scoringService = scoringService ?? new RelevanceScoringService();
   }
 
@@ -101,14 +103,47 @@ export class RepositorySearchService {
       const score = this.scoringService.score(query, chunk, searchIntent);
       if (score < RETRIEVAL_CONFIG.minRelevanceScore) continue;
 
+      let lineNumber: number | undefined = chunk.metadata?.lineNumber || chunk.metadata?.startLine;
+      if (!lineNumber && chunk.content) {
+        const lines = chunk.content.split("\n");
+        const queryLower = query.toLowerCase();
+        const nameLower = chunk.name ? chunk.name.toLowerCase() : "";
+        
+        let foundIdx = lines.findIndex((l) => queryLower && l.toLowerCase().includes(queryLower));
+        if (foundIdx === -1 && nameLower) {
+          foundIdx = lines.findIndex((l) => l.toLowerCase().includes(nameLower));
+        }
+        if (foundIdx !== -1) {
+          lineNumber = foundIdx + 1;
+        }
+      }
+
+      let matchContent = chunk.content;
+      
+      // Improve context quality: retrieve surrounding code window if lineNumber is available
+      if (lineNumber && chunk.content) {
+        const lines = chunk.content.split("\n");
+        const baseWindow = RETRIEVAL_CONFIG.searchContextWindowSize || 15;
+        
+        // Prefer smaller focused context for highly relevant/specific matches
+        const isHighlyRelevant = score > (RETRIEVAL_CONFIG.minRelevanceScore * 1.5) || chunk.type === "symbol";
+        const windowSize = isHighlyRelevant ? Math.min(5, baseWindow) : baseWindow;
+        
+        const startIdx = Math.max(0, lineNumber - 1 - windowSize);
+        const endIdx = Math.min(lines.length, lineNumber + windowSize);
+        
+        matchContent = lines.slice(startIdx, endIdx).join("\n");
+      }
+
       const match: SearchMatch = {
         id: chunk.id,
         type: chunk.type,
         name: chunk.name,
         filePath: chunk.filePath,
-        content: chunk.content,
+        content: matchContent,
         score,
         metadata: chunk.metadata,
+        lineNumber,
       };
 
       switch (chunk.type) {
