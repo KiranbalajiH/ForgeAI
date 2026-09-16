@@ -15,9 +15,11 @@ export default function AuthLayout({
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-md rounded-xl border bg-background p-8 shadow-lg">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold">ForgeAI</h1>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">
+            Agentic RAG Knowledge Assistant
+          </h1>
 
-          <h2 className="mt-6 text-2xl font-semibold">
+          <h2 className="mt-4 text-2xl font-semibold">
             {title}
           </h2>
 

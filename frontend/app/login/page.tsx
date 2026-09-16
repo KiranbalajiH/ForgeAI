@@ -5,7 +5,7 @@ export default function LoginPage() {
   return (
     <AuthLayout
       title="Welcome Back"
-      subtitle="Sign in to your ForgeAI account"
+      subtitle="Sign in to your Agentic RAG Knowledge Assistant account"
     >
       <LoginForm />
     </AuthLayout>

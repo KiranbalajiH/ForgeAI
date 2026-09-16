@@ -5,7 +5,7 @@ export default function SignupPage() {
   return (
     <AuthLayout
       title="Create Account"
-      subtitle="Start using ForgeAI today"
+      subtitle="Start using Agentic RAG Knowledge Assistant today"
     >
       <SignupForm />
     </AuthLayout>
