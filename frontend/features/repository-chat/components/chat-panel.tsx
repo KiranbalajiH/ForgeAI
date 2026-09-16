@@ -84,17 +84,19 @@ function ChatPanelContent({ repositoryName = "default" }: ChatPanelProps) {
             )}
 
             <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-              <SheetTrigger>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
-                  title="View conversation history"
-                >
-                  <History className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">History</span>
-                </Button>
-              </SheetTrigger>
+              <SheetTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
+                    title="View conversation history"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">History</span>
+                  </Button>
+                }
+              />
               <SheetContent side="left" className="w-full sm:max-w-md flex flex-col p-0 bg-background">
                 <SheetHeader className="p-6 pb-4 border-b">
                   <SheetTitle>Conversation History</SheetTitle>
