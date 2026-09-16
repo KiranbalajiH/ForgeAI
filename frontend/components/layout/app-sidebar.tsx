@@ -11,10 +11,10 @@ export default function AppSidebar() {
     <aside className="h-screen w-64 border-r bg-background shadow-lg md:shadow-none">
       {/* Logo */}
       <div className="border-b p-6">
-        <h1 className="text-2xl font-bold">ForgeAI</h1>
+        <h1 className="text-xl font-bold">Agentic RAG</h1>
 
-        <p className="text-sm text-muted-foreground">
-          Engineering Intelligence
+        <p className="text-xs text-muted-foreground">
+          Knowledge Assistant
         </p>
       </div>
 

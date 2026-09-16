@@ -1,49 +1,19 @@
 import {
-  LayoutDashboard,
-  FolderGit2,
-  BrainCircuit,
-  GitBranch,
-  ShieldCheck,
-  FileText,
-  BarChart3,
+  MessageSquare,
+  Database,
   Settings,
 } from "lucide-react";
 
 export const sidebarItems = [
   {
-    title: "Dashboard",
+    title: "Chat / Ask",
     href: "/",
-    icon: LayoutDashboard,
+    icon: MessageSquare,
   },
   {
-    title: "Repositories",
-    href: "/repositories",
-    icon: FolderGit2,
-  },
-  {
-    title: "Engineering Brain",
-    href: "/engineering",
-    icon: BrainCircuit,
-  },
-  {
-    title: "Architecture",
-    href: "/architecture",
-    icon: GitBranch,
-  },
-  {
-    title: "Security",
-    href: "/security",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Documentation",
-    href: "/documentation",
-    icon: FileText,
-  },
-  {
-    title: "Analytics",
-    href: "/analytics",
-    icon: BarChart3,
+    title: "Knowledge Base",
+    href: "/knowledge",
+    icon: Database,
   },
   {
     title: "Settings",

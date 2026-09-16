@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ForgeAI",
-  description: "AI Software Engineering Copilot",
+  title: "Agentic RAG Knowledge Assistant",
+  description: "AI-powered grounded knowledge assistant",
 };
 
 export default function RootLayout({

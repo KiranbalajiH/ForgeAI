@@ -49,7 +49,7 @@ export default function SettingsPage() {
   return (
     <PageTemplate
       title="Settings"
-      description="Manage your ForgeAI preferences and AI provider configurations."
+      description="Manage your preferences and AI provider configurations."
     >
       <div className="space-y-6 max-w-4xl">
         {/* AI Provider Configuration Section */}
@@ -60,7 +60,7 @@ export default function SettingsPage() {
               <CardTitle>AI Provider & Model Preferences</CardTitle>
             </div>
             <CardDescription>
-              Select your default AI provider for Repository Chat, Code Analysis, and Engineering Intelligence.
+              Select your default AI provider for Knowledge Chat, Web search context, and Answer generation.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

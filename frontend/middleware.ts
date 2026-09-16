@@ -27,6 +27,8 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/knowledge/:path*",
+    "/knowledge",
     "/repositories/:path*",
     "/engineering/:path*",
     "/architecture/:path*",

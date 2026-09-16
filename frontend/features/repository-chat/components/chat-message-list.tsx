@@ -43,20 +43,20 @@ export default function ChatMessageList({
 
         <div className="space-y-1.5 max-w-sm">
           <h3 className="text-base font-semibold text-foreground">
-            Ask anything about {repositoryName || "this repository"}
+            Ask the Knowledge Assistant
           </h3>
 
           <p className="text-xs text-muted-foreground leading-relaxed">
-            ForgeAI indexes files, controllers, services, routes, and models to give you fast, contextual answers.
+            Upload text documents to your Knowledge Base to query them, compare with live search, or run automated API checks.
           </p>
         </div>
 
         <div className="mt-3 flex flex-wrap justify-center gap-2 max-w-md">
           {[
-            "How does authentication work?",
-            "List all API endpoints",
-            "What database ORM is used?",
-            "Explain the repository architecture",
+            "Compare our internal documents with live search",
+            "What is our vacation policy?",
+            "What are the system metrics?",
+            "Explain the deployment guidelines",
           ].map((hint) => (
             <button
               key={hint}
@@ -102,7 +102,7 @@ export default function ChatMessageList({
             </div>
 
             <div className="flex items-center gap-1.5 rounded-xl border bg-muted/40 px-4 py-3 text-muted-foreground rounded-tl-none shadow-2xs">
-              <span className="text-xs font-medium mr-1 text-foreground">ForgeAI is thinking</span>
+              <span className="text-xs font-medium mr-1 text-foreground">Assistant is thinking</span>
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" />

@@ -29,7 +29,7 @@ export function AuthProvider({
   }, []);
 
  const login = (newToken: string, newUser?: User) => {
-  Cookies.set("token", newToken);
+  Cookies.set("token", newToken, { path: "/" });
 
   setToken(newToken);
 
